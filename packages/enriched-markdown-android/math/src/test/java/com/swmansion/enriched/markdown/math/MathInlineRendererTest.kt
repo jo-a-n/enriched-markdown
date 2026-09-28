@@ -5,7 +5,7 @@ package com.swmansion.enriched.markdown.math
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.defaultStyle
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.document
-import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexInline
+import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexMathInline
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.paragraph
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.render
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.text
@@ -26,15 +26,19 @@ import org.robolectric.annotation.Config
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
 class MathInlineRendererTest {
+  // The registry is process-wide and the first render anywhere freezes it.
   @Before
-  fun setUp() = EnrichedMarkdownPlugins.install(LatexMathPlugin)
+  fun setUp() {
+    EnrichedMarkdownPlugins.reset()
+    EnrichedMarkdownPlugins.install(LatexMathPlugin)
+  }
 
   @After
   fun tearDown() = EnrichedMarkdownPlugins.reset()
 
   @Test
   fun inlineMathRendersAsOneSpanOverTheObjectReplacementCharacter() {
-    val styled = render(document(paragraph(text("Area: "), latexInline("\\pi r^2"))))
+    val styled = render(document(paragraph(text("Area: "), latexMathInline("\\pi r^2"))))
 
     val span = styled.getSpans(0, styled.length, MathInlineSpan::class.java).single()
 
@@ -44,7 +48,7 @@ class MathInlineRendererTest {
 
   @Test
   fun inlineMathFontSizeFollowsTheEnclosingBlock() {
-    val styled = render(document(paragraph(latexInline("x"))))
+    val styled = render(document(paragraph(latexMathInline("x"))))
 
     val span = styled.getSpans(0, styled.length, MathInlineSpan::class.java).single()
 
@@ -55,7 +59,7 @@ class MathInlineRendererTest {
   fun withoutThePluginInlineMathStaysItsOwnSource() {
     EnrichedMarkdownPlugins.reset()
 
-    val styled = render(document(paragraph(text("Area: "), latexInline("\\pi r^2"))))
+    val styled = render(document(paragraph(text("Area: "), latexMathInline("\\pi r^2"))))
 
     assertEquals(0, styled.getSpans(0, styled.length, MathInlineSpan::class.java).size)
     assertEquals("Area: \$\\pi r^2\$", styled.toString())
@@ -64,7 +68,7 @@ class MathInlineRendererTest {
   /** Core owns the extraction; the span owns the delimiters. */
   @Test
   fun markdownExtractionWrapsInlineMathInDollarDelimiters() {
-    val styled = render(document(paragraph(text("Area: "), latexInline("\\pi r^2"))))
+    val styled = render(document(paragraph(text("Area: "), latexMathInline("\\pi r^2"))))
 
     val markdown = MarkdownExtractor.extractFromSpannable(styled, 0, styled.length)
 

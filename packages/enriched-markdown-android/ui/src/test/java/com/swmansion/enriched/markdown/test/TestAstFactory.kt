@@ -123,9 +123,9 @@ object TestAstFactory {
       children = children.toList(),
     )
 
-  fun latexInline(content: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathInline, content = content)
+  fun latexMathInline(content: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathInline, content = content)
 
-  fun latexDisplay(content: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathDisplay, content = content)
+  fun latexMathDisplay(content: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathDisplay, content = content)
 
   fun softBreak(): MarkdownASTNode = MarkdownASTNode(NodeType.SoftBreak)
 

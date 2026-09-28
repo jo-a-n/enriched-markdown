@@ -33,6 +33,8 @@ import kotlin.math.ceil
 class MathContainerView(
   context: Context,
   styleConfig: StyleConfig,
+  private val selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig(),
+  private val onPluginEvent: PluginEventSink? = null,
 ) : FrameLayout(context),
   BlockSegmentView {
   private val mathStyle: MathStyle = styleConfig.mathStyle(context)
@@ -41,9 +43,6 @@ class MathContainerView(
 
   var latex: String = ""
     private set
-
-  var selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig()
-  var onPluginEvent: PluginEventSink? = null
 
   override val segmentMarginTop: Int get() = mathStyle.marginTop.toInt()
   override val segmentMarginBottom: Int get() = mathStyle.marginBottom.toInt()

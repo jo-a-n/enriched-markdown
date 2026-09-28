@@ -13,6 +13,7 @@ import com.swmansion.enriched.markdown.test.FakePlugin
 import com.swmansion.enriched.markdown.test.FakeSegmentView
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,34 +43,17 @@ class PluginViewIntegrationTest {
     assertEquals("fake:y^2", (view.getChildAt(0) as FakeSegmentView).text.toString())
   }
 
-  /** The segment holds the plugin that rendered it, so the registry changing in between loses nothing. */
+  /** A signature is a content hash for view reuse, not an identity: equal blocks each get a view. */
   @Test
-  fun aSegmentIsStillBuiltByItsPluginAfterTheRegistryChanged() {
+  fun identicalSegmentsEachGetAViewOfTheirOwn() {
     val plugin = FakePlugin()
-    EnrichedMarkdownPlugins.install(plugin)
-    val segment = customSegment(plugin, "x^2")
-    EnrichedMarkdownPlugins.uninstall(plugin.id)
     val view = EnrichedMarkdown(context)
 
-    view.applyRenderedSegments(listOf(segment))
+    view.applyRenderedSegments(listOf(customSegment(plugin, "x^2"), customSegment(plugin, "x^2")))
 
-    assertEquals("fake:x^2", (view.getChildAt(0) as FakeSegmentView).text.toString())
-  }
-
-  @Test
-  fun installingAndUninstallingNotifiesListeners() {
-    var changes = 0
-    val listener: () -> Unit = { changes++ }
-    EnrichedMarkdownPlugins.addChangeListener(listener)
-    try {
-      EnrichedMarkdownPlugins.install(FakePlugin())
-      EnrichedMarkdownPlugins.uninstall(FakePlugin.ID)
-      EnrichedMarkdownPlugins.uninstall(FakePlugin.ID)
-    } finally {
-      EnrichedMarkdownPlugins.removeChangeListener(listener)
-    }
-
-    assertEquals("uninstalling what is not installed changes nothing", 2, changes)
+    assertEquals(2, view.childCount)
+    assertEquals(2, plugin.blockSegment.createdViews)
+    assertNotSame(view.getChildAt(0), view.getChildAt(1))
   }
 
   @Test
@@ -87,9 +71,10 @@ class PluginViewIntegrationTest {
 
     // Recycling clears both the callback and what it already reported.
     view.prepareForViewReuse()
+    received.clear()
     view.setOnPluginEventCallback { received.add(it) }
     sink.emit(FakeEvent("boom"))
-    assertEquals(3, received.size)
+    assertEquals(listOf(FakeEvent("boom")), received)
   }
 
   @Test

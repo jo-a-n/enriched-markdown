@@ -10,14 +10,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.compose.MarkdownStyle
 import com.swmansion.enriched.markdown.compose.markdownStyle
 import com.swmansion.enriched.markdown.math.InlineMathStyleKey
+import com.swmansion.enriched.markdown.math.MathDefaults
 import com.swmansion.enriched.markdown.math.MathStyleKey
+import com.swmansion.enriched.markdown.math.inlineMathStyle
+import com.swmansion.enriched.markdown.math.mathStyle
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.context
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.styles.StyleExtensionKey
 import com.swmansion.enriched.markdown.styles.TextAlignment
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -47,10 +49,11 @@ class MathStyleDslTest {
     assertEquals(0xFFEEEEEE.toInt(), resolved.backgroundColor)
     assertEquals(8f * DENSITY, resolved.padding, 0.01f)
     assertEquals(TextAlignment.LEFT, resolved.textAlign)
-    // Untouched: the plugin's own defaults, which core never had to know.
-    assertEquals(0xFF1F2937.toInt(), resolved.color)
-    assertEquals(16f * DENSITY, resolved.marginBottom, 0.01f)
-    assertEquals(0f, resolved.marginTop, 0.01f)
+    // Untouched: the plugin's own defaults, resolved against the context as core's are.
+    val defaults = MathDefaults.mathStyle(context)
+    assertEquals(defaults.color, resolved.color)
+    assertEquals(defaults.marginBottom, resolved.marginBottom)
+    assertEquals(defaults.marginTop, resolved.marginTop)
   }
 
   @Test
@@ -74,17 +77,23 @@ class MathStyleDslTest {
     assertEquals(0xFF112233.toInt(), resolved.color)
   }
 
+  /**
+   * Core cannot know a plugin's defaults, so a key no block touched is simply not stored; the
+   * plugin's accessor fills its defaults in when the key is read.
+   */
   @Test
-  fun aKeyNoBlockTouchedStaysAbsent() {
-    assertNull(resolveConfig(markdownStyle { math { fontSize = 24.sp } })[InlineMathStyleKey])
+  fun aKeyNoBlockTouchedReadsAsThePluginsDefault() {
+    val resolved = resolveConfig(markdownStyle { math { fontSize = 24.sp } })
+
+    assertEquals(MathDefaults.inlineMathStyle(), resolved.inlineMathStyle())
   }
 
   @Test
-  fun anEmptyStyleLeavesBothKeysToThePluginsOwnDefaults() {
+  fun anEmptyStyleReadsAsThePluginsDefaults() {
     val resolved = resolveConfig(MarkdownStyle.Default)
 
-    assertNull(resolved[MathStyleKey])
-    assertNull(resolved[InlineMathStyleKey])
+    assertEquals(MathDefaults.mathStyle(context), resolved.mathStyle(context))
+    assertEquals(MathDefaults.inlineMathStyle(), resolved.inlineMathStyle())
   }
 
   private fun <T : Any> resolve(

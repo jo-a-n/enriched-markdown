@@ -86,12 +86,6 @@ class EnrichedMarkdown(
       override fun removeEldestEntry(eldest: MutableMap.MutableEntry<PluginEvent, Unit>?): Boolean = size > MAX_REPORTED_PLUGIN_EVENTS
     }
 
-  private var renderedPlugins: PluginSnapshot? = null
-
-  private val pluginChangeListener: () -> Unit = {
-    mainHandler.post { rerenderIfPluginsChanged() }
-  }
-
   private val pluginEventSink =
     PluginEventSink { event ->
       // Plugins emit from the render thread (renderPayload, node renderers) and from the main
@@ -306,11 +300,6 @@ class EnrichedMarkdown(
     val style = markdownStyle
     val markdown = currentMarkdown
     val plugins = EnrichedMarkdownPlugins.snapshot
-    if (renderedPlugins != null && renderedPlugins !== plugins) {
-      // Signatures come from the AST alone, so the reconciler would keep the old plugins' views.
-      needsSegmentReset = true
-    }
-    renderedPlugins = plugins
 
     warnIfMathPluginMissing(plugins)
 
@@ -386,23 +375,10 @@ class EnrichedMarkdown(
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
-    EnrichedMarkdownPlugins.addChangeListener(pluginChangeListener)
     pendingSegments?.let {
       pendingSegments = null
       applyRenderedSegments(it)
     }
-    // The listener was not registered while detached.
-    rerenderIfPluginsChanged()
-  }
-
-  override fun onDetachedFromWindow() {
-    EnrichedMarkdownPlugins.removeChangeListener(pluginChangeListener)
-    super.onDetachedFromWindow()
-  }
-
-  private fun rerenderIfPluginsChanged() {
-    val rendered = renderedPlugins ?: return
-    if (rendered !== EnrichedMarkdownPlugins.snapshot) scheduleRenderIfNeeded()
   }
 
   override fun onMeasure(

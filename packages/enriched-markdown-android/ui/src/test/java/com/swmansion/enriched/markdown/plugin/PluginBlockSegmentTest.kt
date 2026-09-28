@@ -15,7 +15,7 @@ import com.swmansion.enriched.markdown.test.FakeBlockSegment
 import com.swmansion.enriched.markdown.test.FakePlugin
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport.defaultStyle
 import com.swmansion.enriched.markdown.test.TestAstFactory.document
-import com.swmansion.enriched.markdown.test.TestAstFactory.latexDisplay
+import com.swmansion.enriched.markdown.test.TestAstFactory.latexMathDisplay
 import com.swmansion.enriched.markdown.test.TestAstFactory.paragraph
 import com.swmansion.enriched.markdown.test.TestAstFactory.text
 import org.junit.Assert.assertEquals
@@ -39,7 +39,7 @@ class PluginBlockSegmentTest {
     val doc =
       document(
         paragraph(text("before")),
-        latexDisplay("x^2"),
+        latexMathDisplay("x^2"),
         paragraph(text("after")),
       )
 
@@ -56,7 +56,7 @@ class PluginBlockSegmentTest {
 
   @Test
   fun anUnclaimedNodeStaysInsideTheTextSegment() {
-    val doc = document(paragraph(text("before")), latexDisplay("x^2"))
+    val doc = document(paragraph(text("before")), latexMathDisplay("x^2"))
 
     val segments = splitASTIntoSegments(doc, PluginSnapshot.EMPTY)
 
@@ -76,7 +76,7 @@ class PluginBlockSegmentTest {
 
   @Test
   fun renderAsksTheOwningPluginForItsPayload() {
-    val rendered = render(document(latexDisplay("x^2")))
+    val rendered = render(document(latexMathDisplay("x^2")))
 
     val custom = rendered.single() as RenderedSegment.Custom<*>
     assertEquals(FakePlugin.ID, custom.pluginId)
@@ -86,7 +86,7 @@ class PluginBlockSegmentTest {
 
   @Test
   fun aNullPayloadFallsBackToTextRenderingInsteadOfDroppingTheNode() {
-    val rendered = render(document(latexDisplay(FakePlugin.DECLINE)))
+    val rendered = render(document(latexMathDisplay(FakePlugin.DECLINE)))
 
     val fallback = rendered.single() as RenderedSegment.Text
     assertEquals("\$\$${FakePlugin.DECLINE}\$\$", fallback.styledText.toString())
@@ -94,7 +94,7 @@ class PluginBlockSegmentTest {
 
   @Test
   fun withoutAClaimTheNodeRendersAsText() {
-    val rendered = render(document(latexDisplay("x^2")), PluginSnapshot.EMPTY)
+    val rendered = render(document(latexMathDisplay("x^2")), PluginSnapshot.EMPTY)
 
     assertTrue(rendered.single() is RenderedSegment.Text)
   }
@@ -103,7 +103,7 @@ class PluginBlockSegmentTest {
   @Test
   fun onePluginCanOwnSeveralBlockSegmentImplementations() {
     val twoSegments = TwoSegmentPlugin(NodeType.CodeBlock)
-    val doc = document(latexDisplay("x"), MarkdownASTNode(NodeType.CodeBlock, content = "y"))
+    val doc = document(latexMathDisplay("x"), MarkdownASTNode(NodeType.CodeBlock, content = "y"))
 
     val rendered = render(doc, PluginSnapshot.of(twoSegments)).map { it as RenderedSegment.Custom<*> }
 
@@ -114,10 +114,10 @@ class PluginBlockSegmentTest {
 
   @Test
   fun signaturesAreStableForIdenticalContentAndUniquePerPayloadAndKind() {
-    val first = render(document(latexDisplay("x^2"))).single()
-    val same = render(document(latexDisplay("x^2"))).single()
-    val other = render(document(latexDisplay("y^2"))).single()
-    val asText = render(document(latexDisplay("x^2")), PluginSnapshot.EMPTY).single()
+    val first = render(document(latexMathDisplay("x^2"))).single()
+    val same = render(document(latexMathDisplay("x^2"))).single()
+    val other = render(document(latexMathDisplay("y^2"))).single()
+    val asText = render(document(latexMathDisplay("x^2")), PluginSnapshot.EMPTY).single()
 
     assertEquals(first.signature, same.signature)
     assertNotEquals(first.signature, other.signature)
@@ -126,8 +126,8 @@ class PluginBlockSegmentTest {
 
   @Test
   fun theOwningPluginIdSaltsTheSignature() {
-    val fromA = render(document(latexDisplay("x")), PluginSnapshot.of(FakePlugin(id = "a", marker = "shared"))).single()
-    val fromB = render(document(latexDisplay("x")), PluginSnapshot.of(FakePlugin(id = "b", marker = "shared"))).single()
+    val fromA = render(document(latexMathDisplay("x")), PluginSnapshot.of(FakePlugin(id = "a", marker = "shared"))).single()
+    val fromB = render(document(latexMathDisplay("x")), PluginSnapshot.of(FakePlugin(id = "b", marker = "shared"))).single()
 
     assertEquals("shared:x", (fromA as RenderedSegment.Custom<*>).payload.signatureSource)
     assertEquals("shared:x", (fromB as RenderedSegment.Custom<*>).payload.signatureSource)

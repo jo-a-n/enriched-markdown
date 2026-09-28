@@ -10,7 +10,7 @@ import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.context
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.defaultStyle
-import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexDisplay
+import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexMathDisplay
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginEvent
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
@@ -60,10 +60,10 @@ class RaTeXUnavailableTest {
   @Test
   fun blockPayloadRecordsTheFailureAndTheViewDrawsItsSourceInsteadOfThrowing() {
     val sink = RecordingSink()
-    val payload = MathBlockSegment().renderPayload(latexDisplay("E = mc^2"), defaultStyle, context)
+    val payload = MathBlockSegment().renderPayload(latexMathDisplay("E = mc^2"), defaultStyle, context)
     assertNotNull(payload!!.failure)
 
-    val view = MathContainerView(context, defaultStyle).apply { onPluginEvent = sink }
+    val view = MathContainerView(context, defaultStyle, onPluginEvent = sink)
     view.applyPayload(payload)
     view.measure(
       View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),

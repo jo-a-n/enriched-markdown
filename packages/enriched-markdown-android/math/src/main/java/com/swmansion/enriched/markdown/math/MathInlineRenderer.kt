@@ -18,6 +18,10 @@ class MathInlineRenderer(
   private val config: RendererConfig,
   private val context: Context,
 ) : NodeRenderer {
+  // One renderer serves one render, so the style is resolved once rather than per equation.
+  private val blockFontSize by lazy { config.style.mathStyle(context).fontSize }
+  private val textColor = config.style.inlineMathStyle().color
+
   override fun render(
     node: MarkdownASTNode,
     builder: SpannableStringBuilder,
@@ -39,7 +43,7 @@ class MathInlineRenderer(
     // math promoted to its own node has no enclosing block, so it falls back to the block style.
     val fontSize =
       factory.blockStyleContext.currentBlockStyleOrNull()?.fontSize
-        ?: config.style.mathStyle(context).fontSize
+        ?: blockFontSize
 
     val start = builder.length
     builder.append(OBJECT_REPLACEMENT_CHARACTER)
@@ -48,7 +52,7 @@ class MathInlineRenderer(
       MathInlineSpan.layOut(
         latex = latex,
         fontSize = fontSize,
-        textColor = config.style.inlineMathStyle(context).color,
+        textColor = textColor,
         onPluginEvent = config.onPluginEvent,
       )
 

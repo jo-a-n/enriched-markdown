@@ -6,8 +6,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.swmansion.enriched.markdown.compose.MarkdownStyleBuilder
 import com.swmansion.enriched.markdown.compose.MarkdownStyleDsl
 import com.swmansion.enriched.markdown.compose.style.PluginStylePatch
@@ -38,7 +36,7 @@ internal data class MathStylePatch(
     base: MathStyle?,
     scope: PluginStyleScope,
   ): MathStyle {
-    val current = base ?: MathDefaults.mathStyle({ scope.px(it.sp) }, { scope.px(it.dp) })
+    val current = base ?: MathDefaults.mathStyle(scope.context)
     return current.copy(
       fontSize = fontSize?.let { scope.px(it) } ?: current.fontSize,
       color = color?.let { scope.argb(it) } ?: current.color,

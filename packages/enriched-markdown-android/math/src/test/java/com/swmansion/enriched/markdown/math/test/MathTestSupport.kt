@@ -35,8 +35,8 @@ object MathTestSupport {
 
   fun text(content: String): MarkdownASTNode = MarkdownASTNode(NodeType.Text, content = content)
 
-  fun latexInline(latex: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathInline, children = listOf(text(latex)))
+  fun latexMathInline(latex: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathInline, children = listOf(text(latex)))
 
   /** Display math as the parser emits it once promoted out of its paragraph to document level. */
-  fun latexDisplay(latex: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathDisplay, children = listOf(text(latex)))
+  fun latexMathDisplay(latex: String): MarkdownASTNode = MarkdownASTNode(NodeType.LatexMathDisplay, children = listOf(text(latex)))
 }

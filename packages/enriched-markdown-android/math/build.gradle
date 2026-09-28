@@ -9,7 +9,6 @@ android {
 
   defaultConfig {
     minSdk = rootProject.ext.minSdkVersion
-    consumerProguardFiles("consumer-rules.pro")
   }
 
   testOptions {

@@ -55,9 +55,7 @@ class MathBlockSegment : BlockSegmentPlugin<MathSegmentPayload> {
     payload: MathSegmentPayload,
     config: SegmentViewConfig,
   ): View =
-    MathContainerView(config.context, config.style).apply {
-      selectionMenuConfig = config.selectionMenuConfig
-      onPluginEvent = config.onPluginEvent
+    MathContainerView(config.context, config.style, config.selectionMenuConfig, config.onPluginEvent).apply {
       applyPayload(payload)
     }
 

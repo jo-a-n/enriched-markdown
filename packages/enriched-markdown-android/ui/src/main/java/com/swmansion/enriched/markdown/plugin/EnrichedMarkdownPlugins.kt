@@ -7,7 +7,6 @@ import android.util.Log
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode.NodeType
 import com.swmansion.enriched.markdown.renderer.NodeRenderer
 import com.swmansion.enriched.markdown.renderer.RendererConfig
-import java.util.concurrent.CopyOnWriteArraySet
 
 @InternalPluginApi
 class BlockSegmentRegistration internal constructor(
@@ -16,8 +15,9 @@ class BlockSegmentRegistration internal constructor(
 )
 
 /**
- * The registrations in force for one render, as an immutable value. A render takes it once and
- * hands it to every stage, so an install mid-render cannot split a document across two registries.
+ * The installed registrations, as an immutable value. Rendering entry points take one as a
+ * parameter, defaulting to the registry's, so a test can render against plugins of its own
+ * without touching the process-wide registry.
  *
  * Only its contents are [InternalPluginApi], so rendering entry points can take one without
  * making their callers opt in.
@@ -95,66 +95,65 @@ class PluginSnapshot internal constructor(
   }
 }
 
-/** Global, app-level registry. Thread-safe; renders read an immutable [snapshot]. */
+/**
+ * Global, app-level registry. Plugins are installed once, at startup, before any markdown renders:
+ * the first render freezes the registry, and a later [install] is ignored with a warning. Nothing
+ * rendered can therefore disagree with what is installed, and a view never has to re-render
+ * because the plugins changed under it.
+ */
 object EnrichedMarkdownPlugins {
   private val lock = Any()
 
   /** What each installed plugin registered, in install order. Guarded by [lock]. */
   private val installed = LinkedHashMap<String, PluginSnapshot.Registrations>()
 
-  private val changeListeners = CopyOnWriteArraySet<() -> Unit>()
+  /** Guarded by [lock]; volatile so [snapshot] can skip the lock once it is set. */
+  @Volatile
+  private var frozen = false
+
+  @Volatile
+  private var current: PluginSnapshot = PluginSnapshot.EMPTY
+
+  /** What renders use. Reading it freezes the registry. */
+  val snapshot: PluginSnapshot
+    get() {
+      if (!frozen) synchronized(lock) { frozen = true }
+      return current
+    }
 
   /**
-   * Published under [lock] and read without one: a render reads this once and works from the
-   * value, so it costs nothing per node and cannot tear.
+   * Installing an id that is already installed replaces its registrations, it does not add to
+   * them. Ignored, with a warning, once anything has rendered.
    */
-  @Volatile
-  var snapshot: PluginSnapshot = PluginSnapshot.EMPTY
-    private set
-
-  /** Installing an id that is already installed replaces its registrations, it does not add to them. */
   fun install(vararg plugins: MarkdownPlugin) {
     if (plugins.isEmpty()) return
     synchronized(lock) {
+      if (frozen) {
+        Log.w(
+          TAG,
+          "Ignoring install of ${plugins.joinToString { "'${it.id}'" }}: markdown has already rendered. " +
+            "Install plugins at startup, before any EnrichedMarkdown view renders.",
+        )
+        return
+      }
       for (plugin in plugins) {
         installed[plugin.id] = PluginSnapshot.Registrations(plugin.id).also(plugin::install)
       }
-      publish()
+      current = PluginSnapshot.build(installed.values)
     }
-    notifyChanged()
-  }
-
-  fun uninstall(pluginId: String) {
-    val removed = synchronized(lock) { installed.remove(pluginId)?.also { publish() } != null }
-    if (removed) notifyChanged()
   }
 
   fun isInstalled(pluginId: String): Boolean = synchronized(lock) { installed.containsKey(pluginId) }
 
-  /** Test seam: drops every registration. */
+  /** Test seam: drops every registration and lifts the freeze. */
   @InternalPluginApi
   fun reset() {
     synchronized(lock) {
       installed.clear()
-      snapshot = PluginSnapshot.EMPTY
+      current = PluginSnapshot.EMPTY
+      frozen = false
     }
-    notifyChanged()
   }
 
-  /** Called on the installing thread. */
-  internal fun addChangeListener(listener: () -> Unit) {
-    changeListeners.add(listener)
-  }
-
-  internal fun removeChangeListener(listener: () -> Unit) {
-    changeListeners.remove(listener)
-  }
-
-  private fun publish() {
-    snapshot = PluginSnapshot.build(installed.values)
-  }
-
-  private fun notifyChanged() {
-    changeListeners.forEach { it() }
-  }
+  private const val TAG = "EnrichedMarkdownPlugins"
 }

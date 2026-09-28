@@ -109,7 +109,11 @@ class MarkdownPluginStyleTest {
     assertEquals(with(density) { 30.sp.toPx() }, requireNotNull(resolved[OtherFakePluginStyleKey]).fontSize, 0.01f)
   }
 
-  /** A style rebuilt on every composition must stay `equals`, or Compose recomposes forever. */
+  /**
+   * Checks equality only, not recomposition itself. `EnrichedMarkdownText` keys its style
+   * resolution on the style, so a style written inline - rebuilt on every recomposition - has to
+   * stay `equals` or each recomposition re-resolves it and re-renders the document.
+   */
   @Test
   fun identicallyBuiltStylesWithPluginPatchesAreEqual() {
     fun build() =

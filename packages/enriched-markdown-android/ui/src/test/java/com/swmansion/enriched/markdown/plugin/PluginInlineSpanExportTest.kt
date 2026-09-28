@@ -9,6 +9,7 @@ import com.swmansion.enriched.markdown.utils.text.conversion.MarkdownExtractor
 import com.swmansion.enriched.markdown.utils.text.span.SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE
 import com.swmansion.enriched.markdown.utils.text.view.toClipboardPlainText
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,7 +40,7 @@ class PluginInlineSpanExportTest {
   @Test
   fun htmlExportEscapesTheSpanTextAndOmitsItWhenNull() {
     assertTrue(generateHTML(spannableWith(FakeInlineSpan("a<b"))).contains("a&lt;b</code>"))
-    assertTrue(!generateHTML(spannableWith(FakeInlineSpan("x", htmlText = null))).contains("<code"))
+    assertFalse(generateHTML(spannableWith(FakeInlineSpan("x", htmlText = null))).contains("<code"))
   }
 
   @Test

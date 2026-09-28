@@ -46,7 +46,7 @@ sealed interface RenderedSegment {
     val plugins: PluginSnapshot = EnrichedMarkdownPlugins.snapshot,
   ) : RenderedSegment
 
-  /** Holds the plugin that produced [payload], so its view survives the registry changing. */
+  /** Holds the plugin that produced [payload], so its view is built by that same plugin. */
   data class Custom<P : PluginSegmentPayload>(
     val pluginId: String,
     val plugin: BlockSegmentPlugin<P>,

@@ -10,14 +10,15 @@ import com.swmansion.enriched.markdown.renderer.RendererFactory
 import com.swmansion.enriched.markdown.test.FakePlugin
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport.render
 import com.swmansion.enriched.markdown.test.TestAstFactory.document
-import com.swmansion.enriched.markdown.test.TestAstFactory.latexDisplay
-import com.swmansion.enriched.markdown.test.TestAstFactory.latexInline
+import com.swmansion.enriched.markdown.test.TestAstFactory.latexMathDisplay
+import com.swmansion.enriched.markdown.test.TestAstFactory.latexMathInline
 import com.swmansion.enriched.markdown.test.TestAstFactory.paragraph
 import com.swmansion.enriched.markdown.test.TestAstFactory.text
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -25,6 +26,10 @@ import org.robolectric.annotation.Config
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
 class PluginNodeRendererTest {
+  // The registry is process-wide and the first render anywhere freezes it.
+  @Before
+  fun setUp() = EnrichedMarkdownPlugins.reset()
+
   @After
   fun tearDown() = EnrichedMarkdownPlugins.reset()
 
@@ -32,7 +37,7 @@ class PluginNodeRendererTest {
   fun pluginNodeRendererOverridesTheBuiltIn() {
     EnrichedMarkdownPlugins.install(FakePlugin())
 
-    val rendered = render(document(paragraph(latexInline("x^2")))).toString()
+    val rendered = render(document(paragraph(latexMathInline("x^2")))).toString()
 
     assertTrue(rendered, rendered.contains("[fake:x^2:"))
     assertFalse(rendered, rendered.contains("\$x^2\$"))
@@ -40,18 +45,18 @@ class PluginNodeRendererTest {
 
   @Test
   fun withNoPluginInlineLatexRendersItsRawSource() {
-    val rendered = render(document(paragraph(text("a "), latexInline("x^2"), text(" b")))).toString()
+    val rendered = render(document(paragraph(text("a "), latexMathInline("x^2"), text(" b")))).toString()
 
     assertEquals("a \$x^2\$ b", rendered)
   }
 
   @Test
   fun withNoPluginDisplayLatexRendersItsRawSource() {
-    val inParagraph = render(document(paragraph(latexDisplay("x^2")))).toString()
+    val inParagraph = render(document(paragraph(latexMathDisplay("x^2")))).toString()
     assertEquals("\$\$x^2\$\$", inParagraph)
 
     // Promoted to a top level node there is no enclosing block style to inherit; still no crash.
-    val topLevel = render(document(latexDisplay("x^2"))).toString()
+    val topLevel = render(document(latexMathDisplay("x^2"))).toString()
     assertEquals("\$\$x^2\$\$", topLevel)
   }
 
@@ -71,7 +76,7 @@ class PluginNodeRendererTest {
     EnrichedMarkdownPlugins.install(FakePlugin(marker = "first"))
     EnrichedMarkdownPlugins.install(FakePlugin(marker = "second"))
 
-    val rendered = render(document(paragraph(latexInline("x")))).toString()
+    val rendered = render(document(paragraph(latexMathInline("x")))).toString()
 
     assertTrue(rendered, rendered.contains("[second:x:"))
     assertFalse(rendered, rendered.contains("first"))
@@ -82,7 +87,7 @@ class PluginNodeRendererTest {
     EnrichedMarkdownPlugins.install(FakePlugin(id = "a", marker = "a"))
     EnrichedMarkdownPlugins.install(FakePlugin(id = "b", marker = "b"))
 
-    assertTrue(render(document(paragraph(latexInline("x")))).toString().contains("[b:x:"))
+    assertTrue(render(document(paragraph(latexMathInline("x")))).toString().contains("[b:x:"))
   }
 
   @Test
@@ -102,18 +107,28 @@ class PluginNodeRendererTest {
       },
     )
 
-    assertEquals("\$x\$", render(document(paragraph(latexInline("x")))).toString())
+    assertEquals("\$x\$", render(document(paragraph(latexMathInline("x")))).toString())
   }
 
   @Test
-  fun uninstallRestoresTheBuiltInRenderer() {
-    EnrichedMarkdownPlugins.install(FakePlugin())
-    assertTrue(EnrichedMarkdownPlugins.isInstalled(FakePlugin.ID))
+  fun anInstallAfterTheFirstRenderIsIgnored() {
+    assertEquals("\$x\$", render(document(paragraph(latexMathInline("x")))).toString())
 
-    EnrichedMarkdownPlugins.uninstall(FakePlugin.ID)
+    EnrichedMarkdownPlugins.install(FakePlugin())
 
     assertFalse(EnrichedMarkdownPlugins.isInstalled(FakePlugin.ID))
-    assertEquals("\$x\$", render(document(paragraph(latexInline("x")))).toString())
+    assertEquals("\$x\$", render(document(paragraph(latexMathInline("x")))).toString())
+  }
+
+  @Test
+  fun resetLiftsTheFreeze() {
+    render(document(paragraph(latexMathInline("x"))))
+    EnrichedMarkdownPlugins.reset()
+
+    EnrichedMarkdownPlugins.install(FakePlugin())
+
+    assertTrue(EnrichedMarkdownPlugins.isInstalled(FakePlugin.ID))
+    assertTrue(render(document(paragraph(latexMathInline("x")))).toString().contains("[fake:x:"))
   }
 
   private class ClaimingPlugin(
