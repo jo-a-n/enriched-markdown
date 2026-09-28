@@ -21,12 +21,6 @@ import com.swmansion.enriched.markdown.plugin.PluginRegistry
 object LatexMathPlugin : MarkdownPlugin {
   const val ID = "com.swmansion.enriched.markdown.math"
 
-  /**
-   * One instance for both registrations: rendered segments are looked up by plugin id, which
-   * cannot tell two implementations of the same plugin apart.
-   */
-  private val blockSegment = MathBlockSegment()
-
   override val id: String = ID
 
   override fun install(registry: PluginRegistry) {
@@ -36,6 +30,6 @@ object LatexMathPlugin : MarkdownPlugin {
     // mid-line display math (`a $$x$$ b`), which belongs in the text flow like inline math.
     registry.registerNodeRenderer(NodeType.LatexMathDisplay) { config, context -> MathInlineRenderer(config, context) }
 
-    registry.registerBlockSegment(NodeType.LatexMathDisplay, blockSegment)
+    registry.registerBlockSegment(NodeType.LatexMathDisplay, MathBlockSegment())
   }
 }

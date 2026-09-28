@@ -1,3 +1,5 @@
+@file:OptIn(InternalPluginApi::class)
+
 package com.swmansion.enriched.markdown.utils.text.conversion
 
 import android.graphics.Typeface
@@ -5,6 +7,7 @@ import android.text.Spannable
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
+import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginInlineSpan
 import com.swmansion.enriched.markdown.spans.AdmonitionHeaderSpan
 import com.swmansion.enriched.markdown.spans.AdmonitionIcons
@@ -775,7 +778,13 @@ object HTMLGenerator {
       return
     }
 
-    val pluginText = text.getSpans(pos, pos + 1, PluginInlineSpan::class.java).firstOrNull()?.toHtmlText()
+    val pluginSpan = text.getSpans(pos, pos + 1, PluginInlineSpan::class.java).firstOrNull() ?: return
+    val pluginHtml = pluginSpan.toHtml()
+    if (pluginHtml != null) {
+      html.append(pluginHtml)
+      return
+    }
+    val pluginText = pluginSpan.toHtmlText()
     if (pluginText != null) {
       html
         .append("<code style=\"background-color: ")

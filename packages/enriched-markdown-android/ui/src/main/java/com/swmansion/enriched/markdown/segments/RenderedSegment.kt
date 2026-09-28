@@ -4,12 +4,14 @@ package com.swmansion.enriched.markdown.segments
 
 import android.content.Context
 import android.text.Spannable
-import android.util.Log
+import android.view.View
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.plugin.PluginSegmentPayload
+import com.swmansion.enriched.markdown.plugin.PluginSnapshot
 import com.swmansion.enriched.markdown.renderer.Renderer
 import com.swmansion.enriched.markdown.spans.ImageSpan
 import com.swmansion.enriched.markdown.styles.StyleConfig
@@ -41,18 +43,29 @@ sealed interface RenderedSegment {
     val node: MarkdownASTNode,
     override val signature: Long,
     val imageRequestHeaders: Map<String, String> = emptyMap(),
+    val plugins: PluginSnapshot = EnrichedMarkdownPlugins.snapshot,
   ) : RenderedSegment
 
-  data class Custom(
+  /** Holds the plugin that produced [payload], so its view survives the registry changing. */
+  data class Custom<P : PluginSegmentPayload>(
     val pluginId: String,
-    val payload: PluginSegmentPayload,
+    val plugin: BlockSegmentPlugin<P>,
+    val payload: P,
     override val signature: Long,
-  ) : RenderedSegment
+  ) : RenderedSegment {
+    fun createView(config: SegmentViewConfig): View = plugin.createView(payload, config)
+
+    fun updateView(
+      view: View,
+      config: SegmentViewConfig,
+    ) = plugin.updateView(view, payload, config)
+
+    fun matchesView(view: View): Boolean = plugin.matchesView(view)
+  }
 }
 
 object MarkdownSegmentRenderer {
-  private const val TAG = "MarkdownSegmentRenderer"
-
+  /** [plugins] must be the snapshot [segments] were split with. */
   fun render(
     segments: List<MarkdownSegment>,
     style: StyleConfig,
@@ -61,8 +74,8 @@ object MarkdownSegmentRenderer {
     onLinkPress: ((String) -> Unit)? = null,
     onLinkLongPress: ((String) -> Unit)? = null,
     onPluginEvent: PluginEventSink? = null,
+    plugins: PluginSnapshot = EnrichedMarkdownPlugins.snapshot,
   ): List<RenderedSegment> {
-    val plugins = EnrichedMarkdownPlugins.snapshot
     // Task indices must stay document-global: each Text segment gets a fresh Renderer,
     // so the running count is threaded through explicitly rather than reset per segment.
     var taskIndexOffset = 0
@@ -77,6 +90,7 @@ object MarkdownSegmentRenderer {
           onLinkPress,
           onLinkLongPress,
           onPluginEvent,
+          plugins,
           taskIndexOffset,
         )
       taskIndexOffset = taskItemCount
@@ -91,29 +105,33 @@ object MarkdownSegmentRenderer {
 
         is MarkdownSegment.Table -> {
           val signature = SegmentSignature.signatureForNode(segment.node) xor SegmentSignature.TABLE_KIND_SALT
-          RenderedSegment.Table(segment.node, signature, imageRequestHeaders)
+          RenderedSegment.Table(segment.node, signature, imageRequestHeaders, plugins)
         }
 
         is MarkdownSegment.Custom -> {
-          val plugin = plugins.blockSegmentFor(segment.pluginId)
-          if (plugin == null) {
-            Log.w(TAG, "Plugin '${segment.pluginId}' was uninstalled mid-render; rendering its node as text.")
-          }
           // A null payload is the plugin declining this node - half-arrived content, say. Its
           // source still has to reach the screen, so it falls back to core text rendering.
-          val payload = plugin?.renderPayload(segment.node, style, context)
-          if (payload == null) {
-            renderAsText(listOf(segment.node))
-          } else {
-            RenderedSegment.Custom(
-              pluginId = segment.pluginId,
-              payload = payload,
-              signature = SegmentSignature.signatureForPluginSegment(segment.pluginId, payload.signatureSource),
-            )
-          }
+          renderCustom(segment.pluginId, segment.plugin, segment.node, style, context)
+            ?: renderAsText(listOf(segment.node))
         }
       }
     }
+  }
+
+  private fun <P : PluginSegmentPayload> renderCustom(
+    pluginId: String,
+    plugin: BlockSegmentPlugin<P>,
+    node: MarkdownASTNode,
+    style: StyleConfig,
+    context: Context,
+  ): RenderedSegment.Custom<P>? {
+    val payload = plugin.renderPayload(node, style, context) ?: return null
+    return RenderedSegment.Custom(
+      pluginId = pluginId,
+      plugin = plugin,
+      payload = payload,
+      signature = SegmentSignature.signatureForPluginSegment(pluginId, payload.signatureSource),
+    )
   }
 
   private fun renderTextSegment(
@@ -124,9 +142,10 @@ object MarkdownSegmentRenderer {
     onLinkPress: ((String) -> Unit)?,
     onLinkLongPress: ((String) -> Unit)?,
     onPluginEvent: PluginEventSink?,
+    plugins: PluginSnapshot,
     startingTaskIndex: Int,
   ): Pair<RenderedSegment.Text, Int> {
-    val renderer = Renderer().apply { configure(style, context, imageRequestHeaders, onPluginEvent) }
+    val renderer = Renderer().apply { configure(style, context, imageRequestHeaders, onPluginEvent, plugins) }
     val signature = SegmentSignature.signatureForNodes(nodes) xor SegmentSignature.TEXT_KIND_SALT
 
     val styledText = renderer.renderContent(nodes, onLinkPress, onLinkLongPress, startingTaskIndex)

@@ -25,8 +25,9 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Covers the math pipeline up to, but not including, the RaTeX engine: its native library is not
- * loadable under Robolectric, so nothing here lays out or draws an equation.
+ * Covers how display math is claimed and signed. The RaTeX engine's native library is not loadable
+ * under Robolectric, so every parse here fails - which the payload records without affecting how
+ * the segment is signed - and nothing lays out or draws an equation.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
@@ -43,7 +44,10 @@ class MathBlockSegmentTest {
 
     assertEquals(3, segments.size)
     assertTrue(segments[0] is MarkdownSegment.Text)
-    assertEquals(MarkdownSegment.Custom(LatexMathPlugin.ID, doc.children[1]), segments[1])
+    val custom = segments[1] as MarkdownSegment.Custom
+    assertEquals(LatexMathPlugin.ID, custom.pluginId)
+    assertTrue(custom.plugin is MathBlockSegment)
+    assertEquals(doc.children[1], custom.node)
     assertTrue(segments[2] is MarkdownSegment.Text)
   }
 
@@ -64,7 +68,7 @@ class MathBlockSegmentTest {
 
     val rendered = renderSegmentsOf(document(latexDisplay("E = mc^2"))).single()
 
-    assertEquals("E = mc^2", (rendered as RenderedSegment.Custom).payload.signatureSource)
+    assertEquals("E = mc^2", (rendered as RenderedSegment.Custom<*>).payload.signatureSource)
     assertEquals(LatexMathPlugin.ID, rendered.pluginId)
   }
 

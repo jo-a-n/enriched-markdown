@@ -5,11 +5,12 @@ import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.renderer.NodeRenderer
 import com.swmansion.enriched.markdown.renderer.RendererConfig
 
-@InternalPluginApi
+/** Apps pass plugins to [EnrichedMarkdownPlugins.install] freely; only implementing one needs opt-in. */
 interface MarkdownPlugin {
   /** Stable across releases: it identifies the plugin's registrations and its rendered segments. */
   val id: String
 
+  @InternalPluginApi
   fun install(registry: PluginRegistry)
 }
 
@@ -26,9 +27,12 @@ interface PluginRegistry {
     factory: (RendererConfig, Context) -> NodeRenderer,
   )
 
-  /** Claim a node type as its own block segment with its own View. */
+  /**
+   * Claim a node type as its own block segment with its own View. Only top-level nodes become
+   * segments; nested ones still go through the type's node renderer.
+   */
   fun registerBlockSegment(
     type: MarkdownASTNode.NodeType,
-    segment: BlockSegmentPlugin,
+    segment: BlockSegmentPlugin<*>,
   )
 }

@@ -4,9 +4,13 @@ package com.swmansion.enriched.markdown.plugin
  * Implemented by replacement spans a plugin puts in the spannable, so core's markdown/HTML
  * export round-trips them without knowing what they are.
  */
+@InternalPluginApi
 interface PluginInlineSpan {
   /** Markdown source INCLUDING delimiters, e.g. `$x^2$`. Used by MarkdownExtractor. */
   fun toMarkdownSource(): String
+
+  /** Raw markup for HTML export, inserted unescaped. Null falls back to [toHtmlText]. */
+  fun toHtml(): String? = null
 
   /** Text for HTML export, which core wraps in its inline-code styling. Null omits it. */
   fun toHtmlText(): String?

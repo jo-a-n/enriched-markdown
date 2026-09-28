@@ -44,9 +44,7 @@ Install the plugin once, at startup, before any markdown is rendered:
 import android.app.Application
 import com.swmansion.enriched.markdown.math.LatexMathPlugin
 import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
-import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 
-@OptIn(InternalPluginApi::class)
 class MyApplication : Application() {
   override fun onCreate() {
     super.onCreate()
@@ -60,8 +58,6 @@ class MyApplication : Application() {
 ```xml
 <application android:name=".MyApplication" …>
 ```
-
-The registry is an internal extension surface — we write and version the plugins alongside core — so installing one needs `@OptIn(InternalPluginApi::class)`. Everything else in this README is ordinary public API.
 
 Without the install call nothing breaks: `$...$` and `$$...$$` render as their raw source, delimiters included, and logcat carries a single `EnrichedMarkdown` warning naming the missing artifact and this call.
 

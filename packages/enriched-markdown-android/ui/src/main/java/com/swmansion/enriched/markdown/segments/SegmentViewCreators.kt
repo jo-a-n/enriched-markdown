@@ -63,13 +63,14 @@ object SegmentViewCreators {
       selectionMenuConfig = config.selectionMenuConfig
       onLinkPress = config.onLinkPress
       onLinkLongPress = config.onLinkLongPress
-      applyTableNode(segment.node, segment.imageRequestHeaders)
+      applyTableNode(segment.node, segment.imageRequestHeaders, segment.plugins, config.onPluginEvent)
     }
 
   fun updateTableView(
     view: TableContainerView,
     segment: RenderedSegment.Table,
+    config: SegmentViewConfig,
   ) {
-    view.applyTableNode(segment.node, segment.imageRequestHeaders)
+    view.applyTableNode(segment.node, segment.imageRequestHeaders, segment.plugins, config.onPluginEvent)
   }
 }

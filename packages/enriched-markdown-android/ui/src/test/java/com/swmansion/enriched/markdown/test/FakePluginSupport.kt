@@ -77,7 +77,7 @@ data class FakePayload(
 
 class FakeBlockSegment(
   private val marker: String = FakePlugin.ID,
-) : BlockSegmentPlugin {
+) : BlockSegmentPlugin<FakePayload> {
   var createdViews = 0
     private set
   var updatedViews = 0
@@ -87,13 +87,13 @@ class FakeBlockSegment(
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
-  ): PluginSegmentPayload? {
+  ): FakePayload? {
     if (node.content == FakePlugin.DECLINE) return null
     return FakePayload("$marker:${node.content}")
   }
 
   override fun createView(
-    payload: PluginSegmentPayload,
+    payload: FakePayload,
     config: SegmentViewConfig,
   ): View {
     createdViews++
@@ -102,7 +102,7 @@ class FakeBlockSegment(
 
   override fun updateView(
     view: View,
-    payload: PluginSegmentPayload,
+    payload: FakePayload,
     config: SegmentViewConfig,
   ) {
     updatedViews++
@@ -120,9 +120,12 @@ class FakeSegmentView(
 class FakeInlineSpan(
   private val source: String,
   private val htmlText: String? = source,
+  private val html: String? = null,
 ) : ReplacementSpan(),
   PluginInlineSpan {
   override fun toMarkdownSource(): String = "@@$source@@"
+
+  override fun toHtml(): String? = html
 
   override fun toHtmlText(): String? = htmlText
 

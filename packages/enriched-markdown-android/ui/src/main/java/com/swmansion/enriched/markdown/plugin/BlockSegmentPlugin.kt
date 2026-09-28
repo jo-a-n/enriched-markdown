@@ -9,29 +9,28 @@ import com.swmansion.enriched.markdown.styles.StyleConfig
 /**
  * A block segment owned by a plugin. [renderPayload] runs on the render thread and must not
  * touch views; create/update/matches run on the main thread.
- *
- * A plugin that claims several block node types implements one of these for all of them and
- * switches on `node.type`: views are looked up by plugin id, which cannot tell two
- * implementations of the same plugin apart.
  */
 @InternalPluginApi
-interface BlockSegmentPlugin {
-  /** Render-thread. Returns null to fall back to core text rendering for this node. */
+interface BlockSegmentPlugin<P : PluginSegmentPayload> {
+  /**
+   * Render-thread, so do expensive work here rather than in [updateView]. Returns null to fall back
+   * to core text rendering for this node.
+   */
   fun renderPayload(
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
-  ): PluginSegmentPayload?
+  ): P?
 
   /** Main thread. */
   fun createView(
-    payload: PluginSegmentPayload,
+    payload: P,
     config: SegmentViewConfig,
   ): View
 
   fun updateView(
     view: View,
-    payload: PluginSegmentPayload,
+    payload: P,
     config: SegmentViewConfig,
   )
 

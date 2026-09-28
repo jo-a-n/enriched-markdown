@@ -2,8 +2,11 @@
 
 package com.swmansion.enriched.markdown.plugin
 
+import android.text.SpannableStringBuilder
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+import com.swmansion.enriched.markdown.renderer.NodeRenderer
+import com.swmansion.enriched.markdown.renderer.RendererFactory
 import com.swmansion.enriched.markdown.test.FakePlugin
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport.render
 import com.swmansion.enriched.markdown.test.TestAstFactory.document
@@ -83,6 +86,26 @@ class PluginNodeRendererTest {
   }
 
   @Test
+  fun aPluginCanClaimEveryCoreNodeTypeIncludingSpoilers() {
+    EnrichedMarkdownPlugins.install(ClaimingPlugin(MarkdownASTNode.NodeType.Spoiler) { _, builder, _ -> builder.append("[mine]") })
+
+    val spoiler = MarkdownASTNode(MarkdownASTNode.NodeType.Spoiler, children = listOf(text("hidden")))
+
+    assertEquals("[mine]", render(document(paragraph(spoiler))).toString())
+  }
+
+  @Test
+  fun aPluginRendererCanHandANodeBackToCore() {
+    EnrichedMarkdownPlugins.install(
+      ClaimingPlugin(MarkdownASTNode.NodeType.LatexMathInline) { node, builder, factory ->
+        factory.builtInRenderer(node.type)!!.render(node, builder, null, null, factory)
+      },
+    )
+
+    assertEquals("\$x\$", render(document(paragraph(latexInline("x")))).toString())
+  }
+
+  @Test
   fun uninstallRestoresTheBuiltInRenderer() {
     EnrichedMarkdownPlugins.install(FakePlugin())
     assertTrue(EnrichedMarkdownPlugins.isInstalled(FakePlugin.ID))
@@ -91,5 +114,26 @@ class PluginNodeRendererTest {
 
     assertFalse(EnrichedMarkdownPlugins.isInstalled(FakePlugin.ID))
     assertEquals("\$x\$", render(document(paragraph(latexInline("x")))).toString())
+  }
+
+  private class ClaimingPlugin(
+    private val type: MarkdownASTNode.NodeType,
+    private val render: (MarkdownASTNode, SpannableStringBuilder, RendererFactory) -> Unit,
+  ) : MarkdownPlugin {
+    override val id: String = "claiming"
+
+    override fun install(registry: PluginRegistry) {
+      registry.registerNodeRenderer(type) { _, _ ->
+        object : NodeRenderer {
+          override fun render(
+            node: MarkdownASTNode,
+            builder: SpannableStringBuilder,
+            onLinkPress: ((String) -> Unit)?,
+            onLinkLongPress: ((String) -> Unit)?,
+            factory: RendererFactory,
+          ) = render(node, builder, factory)
+        }
+      }
+    }
   }
 }

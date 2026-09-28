@@ -20,8 +20,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The inline half of the plugin, again stopping short of the RaTeX engine: the span is built here
- * but only lays its equation out during measure, which these tests never reach.
+ * The inline half of the plugin. The RaTeX engine cannot load under Robolectric, so the spans built
+ * here all hold a failed layout and draw their source; what they carry is still checked.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
@@ -74,7 +74,7 @@ class MathInlineRendererTest {
   /** HTML export wraps this in core's inline-code styling, so the `$` must not be repeated here. */
   @Test
   fun htmlTextIsTheBareLatex() {
-    val span = MathInlineSpan(latex = "x^2", fontSize = 16f, textColor = 0)
+    val span = MathInlineSpan.layOut(latex = "x^2", fontSize = 16f, textColor = 0)
 
     assertEquals("x^2", span.toHtmlText())
     assertEquals("\$x^2\$", span.toMarkdownSource())

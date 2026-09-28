@@ -13,7 +13,6 @@ import com.swmansion.enriched.markdown.test.FakePlugin
 import com.swmansion.enriched.markdown.test.FakeSegmentView
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,28 +29,47 @@ class PluginViewIntegrationTest {
   @Test
   fun aCustomSegmentIsBuiltAndRecycledByItsOwningPlugin() {
     val plugin = FakePlugin()
-    EnrichedMarkdownPlugins.install(plugin)
     val view = EnrichedMarkdown(context)
 
-    view.applyRenderedSegments(listOf(customSegment("x^2")))
+    view.applyRenderedSegments(listOf(customSegment(plugin, "x^2")))
     assertEquals(1, plugin.blockSegment.createdViews)
     assertEquals("fake:x^2", (view.getChildAt(0) as FakeSegmentView).text.toString())
 
     // Same kind, different content: the reconciler keeps the view and updates it in place.
-    view.applyRenderedSegments(listOf(customSegment("y^2")))
+    view.applyRenderedSegments(listOf(customSegment(plugin, "y^2")))
     assertEquals(1, plugin.blockSegment.createdViews)
     assertEquals(1, plugin.blockSegment.updatedViews)
     assertEquals("fake:y^2", (view.getChildAt(0) as FakeSegmentView).text.toString())
   }
 
+  /** The segment holds the plugin that rendered it, so the registry changing in between loses nothing. */
   @Test
-  fun aSegmentWhosePluginIsGoneDegradesToAnEmptyView() {
+  fun aSegmentIsStillBuiltByItsPluginAfterTheRegistryChanged() {
+    val plugin = FakePlugin()
+    EnrichedMarkdownPlugins.install(plugin)
+    val segment = customSegment(plugin, "x^2")
+    EnrichedMarkdownPlugins.uninstall(plugin.id)
     val view = EnrichedMarkdown(context)
 
-    view.applyRenderedSegments(listOf(customSegment("x^2")))
+    view.applyRenderedSegments(listOf(segment))
 
-    assertEquals(1, view.childCount)
-    assertFalse(view.getChildAt(0) is FakeSegmentView)
+    assertEquals("fake:x^2", (view.getChildAt(0) as FakeSegmentView).text.toString())
+  }
+
+  @Test
+  fun installingAndUninstallingNotifiesListeners() {
+    var changes = 0
+    val listener: () -> Unit = { changes++ }
+    EnrichedMarkdownPlugins.addChangeListener(listener)
+    try {
+      EnrichedMarkdownPlugins.install(FakePlugin())
+      EnrichedMarkdownPlugins.uninstall(FakePlugin.ID)
+      EnrichedMarkdownPlugins.uninstall(FakePlugin.ID)
+    } finally {
+      EnrichedMarkdownPlugins.removeChangeListener(listener)
+    }
+
+    assertEquals("uninstalling what is not installed changes nothing", 2, changes)
   }
 
   @Test
@@ -75,6 +93,38 @@ class PluginViewIntegrationTest {
   }
 
   @Test
+  fun streamedMarkdownKeepsReportedEventsAndReplacedMarkdownDropsThem() {
+    val view = EnrichedMarkdown(context)
+    val received = mutableListOf<PluginEvent>()
+    view.setOnPluginEventCallback { received.add(it) }
+    val sink = view.pluginEventSinkForTest()
+
+    view.setMarkdownContent("a")
+    sink.emit(FakeEvent("boom"))
+    view.setMarkdownContent("ab")
+    sink.emit(FakeEvent("boom"))
+    assertEquals(1, received.size)
+
+    view.setMarkdownContent("something else")
+    sink.emit(FakeEvent("boom"))
+    assertEquals(2, received.size)
+  }
+
+  @Test
+  fun reportedEventsAreBounded() {
+    val view = EnrichedMarkdown(context)
+    val received = mutableListOf<PluginEvent>()
+    view.setOnPluginEventCallback { received.add(it) }
+    val sink = view.pluginEventSinkForTest()
+
+    repeat(1_000) { sink.emit(FakeEvent("event $it")) }
+    // The oldest has been evicted, so it counts as new again.
+    sink.emit(FakeEvent("event 0"))
+
+    assertEquals(1_001, received.size)
+  }
+
+  @Test
   fun anEventEmittedWithNoCallbackIsNotReplayedToALaterOne() {
     val view = EnrichedMarkdown(context)
     val sink = view.pluginEventSinkForTest()
@@ -87,12 +137,16 @@ class PluginViewIntegrationTest {
     assertTrue(received.isEmpty())
   }
 
-  private fun customSegment(latex: String): RenderedSegment.Custom {
+  private fun customSegment(
+    plugin: FakePlugin,
+    latex: String,
+  ): RenderedSegment.Custom<FakePayload> {
     val source = "fake:$latex"
     return RenderedSegment.Custom(
-      pluginId = FakePlugin.ID,
+      pluginId = plugin.id,
+      plugin = plugin.blockSegment,
       payload = FakePayload(source),
-      signature = SegmentSignature.signatureForPluginSegment(FakePlugin.ID, source),
+      signature = SegmentSignature.signatureForPluginSegment(plugin.id, source),
     )
   }
 

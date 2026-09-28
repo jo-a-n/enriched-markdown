@@ -1,3 +1,5 @@
+@file:OptIn(InternalPluginApi::class)
+
 package com.swmansion.enriched.markdown.math
 
 import android.graphics.Bitmap
@@ -8,9 +10,12 @@ import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.context
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.defaultStyle
+import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexDisplay
+import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginEvent
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,26 +41,30 @@ class RaTeXUnavailableTest {
   }
 
   @Test
-  fun inlineSpanMeasuresAndDrawsItsSourceInsteadOfThrowing() {
+  fun inlineSpanReportsTheFailureWhenLaidOutAndDrawsItsSourceInsteadOfThrowing() {
     val sink = RecordingSink()
-    val span = MathInlineSpan(latex = "x^2", fontSize = 16f, textColor = Color.BLACK, onPluginEvent = sink)
-    val paint = Paint().apply { textSize = 16f }
+    val span = MathInlineSpan.layOut(latex = "x^2", fontSize = 16f, textColor = Color.BLACK, onPluginEvent = sink)
 
+    // Reported on the render thread, before the span is ever measured.
+    val event = sink.events.single() as LatexErrorEvent
+    assertEquals("x^2", event.source)
+    assertEquals(false, event.displayMode)
+
+    val paint = Paint().apply { textSize = 16f }
     val width = span.getSize(paint, "￼", 0, 1, null)
     span.draw(Canvas(Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)), "￼", 0, 1, 0f, 0, 16, 32, paint)
 
     assertTrue("the fallback source needs room to draw in", width > 0)
-    val event = sink.events.single() as LatexErrorEvent
-    assertEquals("x^2", event.source)
-    assertEquals(false, event.displayMode)
   }
 
   @Test
-  fun blockViewMeasuresAndDrawsItsSourceInsteadOfThrowing() {
+  fun blockPayloadRecordsTheFailureAndTheViewDrawsItsSourceInsteadOfThrowing() {
     val sink = RecordingSink()
-    val view = MathContainerView(context, defaultStyle).apply { onPluginEvent = sink }
+    val payload = MathBlockSegment().renderPayload(latexDisplay("E = mc^2"), defaultStyle, context)
+    assertNotNull(payload!!.failure)
 
-    view.applyLatex("E = mc^2")
+    val view = MathContainerView(context, defaultStyle).apply { onPluginEvent = sink }
+    view.applyPayload(payload)
     view.measure(
       View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),
       View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
@@ -70,9 +79,9 @@ class RaTeXUnavailableTest {
   }
 
   @Test
-  fun aSecondFailureOfTheSameSpanIsNotReportedTwice() {
+  fun measuringAFailedSpanAgainReportsNothingMore() {
     val sink = RecordingSink()
-    val span = MathInlineSpan(latex = "x^2", fontSize = 16f, textColor = Color.BLACK, onPluginEvent = sink)
+    val span = MathInlineSpan.layOut(latex = "x^2", fontSize = 16f, textColor = Color.BLACK, onPluginEvent = sink)
     val paint = Paint().apply { textSize = 16f }
 
     span.getSize(paint, "￼", 0, 1, null)

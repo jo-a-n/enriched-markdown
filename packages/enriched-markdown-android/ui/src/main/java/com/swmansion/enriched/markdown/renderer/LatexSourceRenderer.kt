@@ -1,7 +1,10 @@
+@file:OptIn(InternalPluginApi::class)
+
 package com.swmansion.enriched.markdown.renderer
 
 import android.text.SpannableStringBuilder
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.spans.TextSpan
 import com.swmansion.enriched.markdown.utils.text.span.SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE
 
@@ -9,6 +12,7 @@ import com.swmansion.enriched.markdown.utils.text.span.SPAN_FLAGS_EXCLUSIVE_EXCL
  * The latex a latex node carries. md4c hands it over either as the node's own content or split
  * across text children, with breaks that only mattered to the source layout.
  */
+@InternalPluginApi
 fun latexSourceOf(node: MarkdownASTNode): String {
   if (node.content.isNotEmpty()) return node.content
   return node.children.joinToString("") { child ->
@@ -24,7 +28,7 @@ fun latexSourceOf(node: MarkdownASTNode): String {
  * parsed with `Md4cFlags(latexMath = true)` still shows its equations - as text - when no math
  * plugin is installed. A plugin's registered renderer replaces it.
  */
-class LatexSourceRenderer(
+internal class LatexSourceRenderer(
   private val isDisplay: Boolean,
 ) : NodeRenderer {
   override fun render(

@@ -17,10 +17,8 @@ import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.segments.BlockSegmentView
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.styles.TextAlignment
-import com.swmansion.enriched.markdown.utils.text.view.DEFAULT_COPY_AS_MARKDOWN_LABEL
 import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfig
 import com.swmansion.enriched.markdown.views.ContextMenuPopup
-import io.ratex.RaTeXEngine
 import io.ratex.RaTeXFontLoader
 import io.ratex.RaTeXRenderer
 import kotlin.math.ceil
@@ -62,9 +60,6 @@ class MathContainerView(
 
     val paddingPx = mathStyle.padding.toInt()
 
-    // A font-loading failure is not fatal here: applyLatex reports it and draws the source.
-    runRaTeX { RaTeXFontLoader.ensureLoaded(context) }
-
     val mathWrapper =
       FrameLayout(context).apply {
         setPadding(paddingPx, paddingPx, paddingPx, paddingPx)
@@ -97,30 +92,33 @@ class MathContainerView(
     setOnLongClickListener { view -> showContextMenu(view) }
   }
 
-  /**
-   * Lays the equation out for this view. Parsing happens here rather than on the render thread:
-   * the display list it produces is drawn by [RaTeXRenderer] on the main thread and is not known
-   * to be safe to build anywhere else.
-   */
-  fun applyLatex(latex: String) {
-    this.latex = latex
-    runRaTeX(
-      onFailure = { error ->
-        Log.e(TAG, "Failed to render LaTeX", error)
-        mathView.renderer = null
-        mathView.fallbackText = "\$\$" + latex + "\$\$"
-        mathView.fallbackColor = mathStyle.color
-        mathView.fallbackFontSize = mathStyle.fontSize
-        onPluginEvent?.emit(LatexErrorEvent(latex, error.message, displayMode = true))
-      },
-    ) {
-      val displayList = RaTeXEngine.parseBlocking(latex, displayMode = true, color = mathStyle.color)
-      mathView.renderer = RaTeXRenderer(displayList, mathStyle.fontSize) { RaTeXFontLoader.getTypeface(it) }
+  internal fun applyPayload(payload: MathSegmentPayload) {
+    latex = payload.latex
+    var failure = payload.failure
+    val renderer =
+      payload.displayList?.let { displayList ->
+        runRaTeX(onFailure = { failure = it }) {
+          RaTeXRenderer(displayList, mathStyle.fontSize) { RaTeXFontLoader.getTypeface(it) }
+        }
+      }
+    if (renderer != null) {
+      mathView.renderer = renderer
       mathView.fallbackText = null
+    } else {
+      showSource(failure)
     }
     mathView.requestLayout()
     mathView.invalidate()
     updateAccessibilityLabel()
+  }
+
+  private fun showSource(error: Throwable?) {
+    Log.e(TAG, "Failed to render LaTeX", error)
+    mathView.renderer = null
+    mathView.fallbackText = "\$\$" + latex + "\$\$"
+    mathView.fallbackColor = mathStyle.color
+    mathView.fallbackFontSize = mathStyle.fontSize
+    onPluginEvent?.emit(LatexErrorEvent(latex, error?.message, displayMode = true))
   }
 
   private fun updateAccessibilityLabel() {
@@ -136,7 +134,7 @@ class MathContainerView(
       if (selectionMenuConfig.copyAsMarkdown) {
         item(
           ContextMenuPopup.Icon.DOCUMENT,
-          selectionMenuConfig.copyAsMarkdownLabel.ifEmpty { DEFAULT_COPY_AS_MARKDOWN_LABEL },
+          selectionMenuConfig.resolvedCopyAsMarkdownLabel,
         ) {
           clipboard.setPrimaryClip(ClipData.newPlainText("Math", "$$\n$latex\n$$"))
         }

@@ -1,9 +1,11 @@
+@file:OptIn(InternalPluginApi::class)
+
 package com.swmansion.enriched.markdown.math
 
 import android.content.Context
 import android.text.SpannableStringBuilder
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-import com.swmansion.enriched.markdown.renderer.LatexSourceRenderer
+import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.renderer.NodeRenderer
 import com.swmansion.enriched.markdown.renderer.RendererConfig
 import com.swmansion.enriched.markdown.renderer.RendererFactory
@@ -11,26 +13,11 @@ import com.swmansion.enriched.markdown.renderer.latexSourceOf
 import com.swmansion.enriched.markdown.utils.text.span.SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE
 import io.ratex.RaTeXFontLoader
 
-/**
- * Renders `$...$` - and mid-line `$$...$$` - into the spannable as a [MathInlineSpan].
- *
- * Runs on the render thread, so it only measures the text it is given and builds the span; the
- * equation itself is laid out later, during measure.
- */
+/** Renders `$...$` - and mid-line `$$...$$` - into the spannable as a [MathInlineSpan]. */
 class MathInlineRenderer(
   private val config: RendererConfig,
   private val context: Context,
 ) : NodeRenderer {
-  /**
-   * Core's own renderers for the two node types, kept for content with no equation in it: an
-   * unterminated `$$` mid-stream has to reach the screen as the source it is, not disappear.
-   */
-  private val sourceFallbacks =
-    mapOf(
-      MarkdownASTNode.NodeType.LatexMathInline to LatexSourceRenderer(isDisplay = false),
-      MarkdownASTNode.NodeType.LatexMathDisplay to LatexSourceRenderer(isDisplay = true),
-    )
-
   override fun render(
     node: MarkdownASTNode,
     builder: SpannableStringBuilder,
@@ -40,11 +27,11 @@ class MathInlineRenderer(
   ) {
     val latex = latexSourceOf(node)
     if (latex.isBlank()) {
-      sourceFallbacks[node.type]?.render(node, builder, onLinkPress, onLinkLongPress, factory)
+      // An unterminated `$$` mid-stream: core shows it as source instead of dropping it.
+      factory.builtInRenderer(node.type)?.render(node, builder, onLinkPress, onLinkLongPress, factory)
       return
     }
 
-    // Loads the KaTeX fonts here, on the render thread, so the span's first layout pass doesn't.
     // A failure is left to the span, which reports it and draws its own source instead.
     runRaTeX { RaTeXFontLoader.ensureLoaded(context) }
 
@@ -58,7 +45,7 @@ class MathInlineRenderer(
     builder.append(OBJECT_REPLACEMENT_CHARACTER)
 
     val span =
-      MathInlineSpan(
+      MathInlineSpan.layOut(
         latex = latex,
         fontSize = fontSize,
         textColor = config.style.inlineMathStyle(context).color,
@@ -70,6 +57,6 @@ class MathInlineRenderer(
 
   private companion object {
     /** U+FFFC: one character for the equation to replace, so selection and export see a unit. */
-    const val OBJECT_REPLACEMENT_CHARACTER = "\uFFFC"
+    const val OBJECT_REPLACEMENT_CHARACTER = "￼"
   }
 }

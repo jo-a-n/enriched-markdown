@@ -1,12 +1,14 @@
+@file:OptIn(InternalPluginApi::class)
+
 package com.swmansion.enriched.markdown.renderer
 
 import android.content.Context
 import android.text.SpannableStringBuilder
 import android.text.style.CharacterStyle
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
+import com.swmansion.enriched.markdown.plugin.PluginSnapshot
 import com.swmansion.enriched.markdown.spans.ImageSpan
 import com.swmansion.enriched.markdown.styles.StyleConfig
 
@@ -29,6 +31,7 @@ data class RendererConfig(
 class RendererFactory(
   private val config: RendererConfig,
   val context: Context,
+  private val plugins: PluginSnapshot,
   private val onImageSpanCreated: (ImageSpan) -> Unit,
 ) {
   val blockStyleContext = BlockStyleContext()
@@ -80,8 +83,7 @@ class RendererFactory(
   private val lineBreakRenderer = LineBreakRenderer()
   private val softBreakRenderer = SoftBreakRenderer()
 
-  @OptIn(InternalPluginApi::class)
-  private val renderers: Map<MarkdownASTNode.NodeType, NodeRenderer> by lazy {
+  private val builtInRenderers: Map<MarkdownASTNode.NodeType, NodeRenderer> by lazy {
     buildMap {
       put(MarkdownASTNode.NodeType.Document, DocumentRenderer())
       put(MarkdownASTNode.NodeType.Paragraph, ParagraphRenderer(config))
@@ -112,16 +114,19 @@ class RendererFactory(
       // so without a math plugin these echo their own source.
       put(MarkdownASTNode.NodeType.LatexMathInline, LatexSourceRenderer(isDisplay = false))
       put(MarkdownASTNode.NodeType.LatexMathDisplay, LatexSourceRenderer(isDisplay = true))
-
-      // Layered last so a plugin that claims a node type replaces core's handling of it. The
-      // snapshot is read once here rather than per node, so a mid-render install cannot make
-      // one document render against two different registries.
-      for ((type, rendererFactory) in EnrichedMarkdownPlugins.snapshot.nodeRenderers) {
-        put(type, rendererFactory(config, context))
-      }
       put(MarkdownASTNode.NodeType.Spoiler, SpoilerRenderer())
     }
   }
+
+  // Plugins layered over core's own, so a plugin that claims a node type replaces core's handling.
+  private val renderers: Map<MarkdownASTNode.NodeType, NodeRenderer> by lazy {
+    if (plugins.nodeRenderers.isEmpty()) return@lazy builtInRenderers
+    builtInRenderers + plugins.nodeRenderers.mapValues { (_, rendererFactory) -> rendererFactory(config, context) }
+  }
+
+  /** Core's renderer for [type], ignoring plugins; lets a plugin hand back a node it declines. */
+  @InternalPluginApi
+  fun builtInRenderer(type: MarkdownASTNode.NodeType): NodeRenderer? = builtInRenderers[type]
 
   fun registerImageSpan(span: ImageSpan) {
     onImageSpanCreated(span)

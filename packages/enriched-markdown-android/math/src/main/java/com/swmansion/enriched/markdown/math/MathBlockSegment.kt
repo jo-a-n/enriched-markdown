@@ -8,12 +8,19 @@ import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginSegmentPayload
+import com.swmansion.enriched.markdown.renderer.latexSourceOf
 import com.swmansion.enriched.markdown.segments.SegmentViewConfig
 import com.swmansion.enriched.markdown.styles.StyleConfig
+import io.ratex.DisplayList
+import io.ratex.RaTeXEngine
+import io.ratex.RaTeXFontLoader
 
-/** The latex core signs a display-math segment with, and the view lays out. */
-data class MathSegmentPayload(
+/** A display equation, parsed on the render thread. Core signs the segment with [latex]. */
+class MathSegmentPayload internal constructor(
   val latex: String,
+  /** Null when the engine rejected [latex]. */
+  internal val displayList: DisplayList?,
+  internal val failure: Throwable?,
 ) : PluginSegmentPayload {
   override val signatureSource: String get() = latex
 }
@@ -21,52 +28,46 @@ data class MathSegmentPayload(
 /**
  * Display math standing on its own: core gives it a segment of its own, and this gives that
  * segment a [MathContainerView].
- *
- * The latex is only extracted here; it is parsed in the view, on the main thread.
  */
-class MathBlockSegment : BlockSegmentPlugin {
+class MathBlockSegment : BlockSegmentPlugin<MathSegmentPayload> {
   /**
-   * Returns null for anything with no equation in it - half-arrived streamed content, say - which
-   * makes core render the node as text instead, so its source still reaches the screen.
+   * Parses here rather than in the view; RaTeX's own async API runs the same parse off the main
+   * thread. Returns null for half-arrived content, which core then renders as text.
    */
   override fun renderPayload(
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
-  ): PluginSegmentPayload? {
-    val latex = latexOf(node)
+  ): MathSegmentPayload? {
+    val latex = latexSourceOf(node)
     if (latex.isBlank()) return null
-    return MathSegmentPayload(latex)
+
+    var failure: Throwable? = null
+    val displayList =
+      runRaTeX(onFailure = { failure = it }) {
+        RaTeXFontLoader.ensureLoaded(context)
+        RaTeXEngine.parseBlocking(latex, displayMode = true, color = style.mathStyle(context).color)
+      }
+    return MathSegmentPayload(latex, displayList, failure)
   }
 
   override fun createView(
-    payload: PluginSegmentPayload,
+    payload: MathSegmentPayload,
     config: SegmentViewConfig,
   ): View =
     MathContainerView(config.context, config.style).apply {
       selectionMenuConfig = config.selectionMenuConfig
       onPluginEvent = config.onPluginEvent
-      applyLatex((payload as MathSegmentPayload).latex)
+      applyPayload(payload)
     }
 
   override fun updateView(
     view: View,
-    payload: PluginSegmentPayload,
+    payload: MathSegmentPayload,
     config: SegmentViewConfig,
   ) {
-    (view as MathContainerView).applyLatex((payload as MathSegmentPayload).latex)
+    (view as MathContainerView).applyPayload(payload)
   }
 
   override fun matchesView(view: View): Boolean = view is MathContainerView
-
-  /**
-   * A display-math node carries its equation either as its own content or as a single text child,
-   * depending on how the parser reached it.
-   */
-  private fun latexOf(node: MarkdownASTNode): String =
-    if (node.children.isNotEmpty()) {
-      node.children.first().content
-    } else {
-      node.content
-    }
 }
