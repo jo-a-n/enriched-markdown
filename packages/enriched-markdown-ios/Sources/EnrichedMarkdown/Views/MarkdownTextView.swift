@@ -8,7 +8,7 @@ protocol SelectionHandleTouchReporting {
 }
 
 final class MarkdownTextView: UITextView, SelectionHandleTouchReporting, MarkdownAttachmentLayoutObserver {
-    var styleConfig: MarkdownStyleConfig = .baseline() {
+    var styleConfig: MarkdownStyleConfiguration = .baseline() {
         didSet {
             updateDecorationStyleConfig()
             // `updateUIView` assigns this on every pass, so only a real change
@@ -344,7 +344,7 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting, Markdow
     /// TextKit 2 layout fragments.
     func accessibilityScreenFrame(for range: NSRange) -> CGRect {
         var union = CGRect.null
-        TextLayoutHelpers.enumerateSegmentFrames(of: range, in: self) { frame, _ in union = union.union(frame) }
+        TextLayoutHelpers.enumerateSegmentFrames(of: range, in: self) { frame, _, _ in union = union.union(frame) }
         guard !union.isNull else { return .zero }
         return UIAccessibility.convertToScreenCoordinates(union, in: self)
     }
