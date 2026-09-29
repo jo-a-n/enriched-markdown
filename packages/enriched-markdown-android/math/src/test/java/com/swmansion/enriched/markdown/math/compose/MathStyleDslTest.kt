@@ -2,6 +2,8 @@
 
 package com.swmansion.enriched.markdown.math.compose
 
+import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -39,7 +41,7 @@ class MathStyleDslTest {
           fontSize = 24.sp
           backgroundColor = Color(0xFFEEEEEE)
           padding = 8.dp
-          textAlign = TextAlignment.LEFT
+          alignment = AbsoluteAlignment.Left
         }
       }
 
@@ -54,6 +56,23 @@ class MathStyleDslTest {
     assertEquals(defaults.color, resolved.color)
     assertEquals(defaults.marginBottom, resolved.marginBottom)
     assertEquals(defaults.marginTop, resolved.marginTop)
+  }
+
+  @Test
+  fun alignmentMapsOntoTheTextLayersAlignment() {
+    val cases =
+      mapOf(
+        Alignment.Start to TextAlignment.START,
+        Alignment.CenterHorizontally to TextAlignment.CENTER,
+        Alignment.End to TextAlignment.END,
+        AbsoluteAlignment.Left to TextAlignment.LEFT,
+        AbsoluteAlignment.Right to TextAlignment.RIGHT,
+      )
+
+    for ((alignment, expected) in cases) {
+      val resolved = resolve(markdownStyle { math { this.alignment = alignment } }, MathStyleKey)
+      assertEquals("$alignment", expected, resolved.textAlign)
+    }
   }
 
   @Test

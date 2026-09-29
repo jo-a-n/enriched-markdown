@@ -1,5 +1,6 @@
 package swmansion.enriched.markdown.android.example
 
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -13,7 +14,6 @@ import com.swmansion.enriched.markdown.compose.markdownStyle
 // the style builder, so they have to be imported before they can be used below.
 import com.swmansion.enriched.markdown.math.compose.inlineMath
 import com.swmansion.enriched.markdown.math.compose.math
-import com.swmansion.enriched.markdown.styles.TextAlignment
 
 private val MontserratRegular = FontFamily(Font(R.font.montserrat_regular))
 private val MontserratBold = FontFamily(Font(R.font.montserrat_bold))
@@ -164,7 +164,7 @@ val CustomMarkdownStyle: MarkdownStyle =
       backgroundColor = Color(0xFFF5F3FF)
       padding = 12.dp
       marginBottom = 16.dp
-      textAlign = TextAlignment.CENTER
+      alignment = Alignment.CenterHorizontally
     }
     inlineMath {
       color = Color(0xFF7C3AED)
@@ -220,7 +220,7 @@ val PlaygroundMarkdownStyle: MarkdownStyle =
       gapWidth = 12.dp
     }
     math {
-      textAlign = TextAlignment.LEFT
+      alignment = Alignment.Start
       backgroundColor = Color(0xFFF9FAFB)
     }
     inlineMath {

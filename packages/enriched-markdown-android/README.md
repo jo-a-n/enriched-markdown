@@ -223,13 +223,13 @@ markdownStyle {
 `math` and `inlineMath` come from the `:math` artifact, not from the builder itself: they are extension functions on `MarkdownStyleBuilder`, so they need an import before they resolve.
 
 ```kotlin
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.swmansion.enriched.markdown.compose.markdownStyle
 import com.swmansion.enriched.markdown.math.compose.inlineMath
 import com.swmansion.enriched.markdown.math.compose.math
-import com.swmansion.enriched.markdown.styles.TextAlignment
 
 markdownStyle {
   math {
@@ -239,7 +239,7 @@ markdownStyle {
     padding = 12.dp
     marginTop = 0.dp
     marginBottom = 16.dp
-    textAlign = TextAlignment.CENTER
+    alignment = Alignment.CenterHorizontally
   }
   inlineMath {
     color = Color(0xFF7C3AED)
@@ -247,7 +247,7 @@ markdownStyle {
 }
 ```
 
-`math` styles standalone equations: `fontSize`, `color`, `backgroundColor`, `padding`, `marginTop`, `marginBottom`, and `textAlign` (`LEFT`, `CENTER` — the default — or `RIGHT`). `inlineMath` takes a `color` only; its size follows the surrounding text.
+`math` styles standalone equations: `fontSize`, `color`, `backgroundColor`, `padding`, `marginTop`, `marginBottom`, and `alignment`, which places the equation like the table's `alignment` does: `Alignment.Start`, `Alignment.CenterHorizontally` (the default) or `Alignment.End` follow the reading direction, and `AbsoluteAlignment.Left` / `AbsoluteAlignment.Right` pin a side. `inlineMath` takes a `color` only; its size follows the surrounding text.
 
 Properties you leave unset keep the plugin's own defaults, which live in `:math` rather than in core. Repeating either block merges into the earlier one, exactly like the built-in blocks, so `MarkdownStyle.merge { math { … } }` layers over a base style.
 

@@ -3,6 +3,8 @@
 package com.swmansion.enriched.markdown.math.compose
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -30,7 +32,7 @@ internal data class MathStylePatch(
   val padding: Dp? = null,
   val marginTop: Dp? = null,
   val marginBottom: Dp? = null,
-  val textAlign: TextAlignment? = null,
+  val alignment: Alignment.Horizontal? = null,
 ) : PluginStylePatch<MathStyle> {
   override fun apply(
     base: MathStyle?,
@@ -44,12 +46,20 @@ internal data class MathStylePatch(
       padding = padding?.let { scope.px(it) } ?: current.padding,
       marginTop = marginTop?.let { scope.px(it) } ?: current.marginTop,
       marginBottom = marginBottom?.let { scope.px(it) } ?: current.marginBottom,
-      textAlign = textAlign ?: current.textAlign,
+      textAlign = alignment?.toMathTextAlignment() ?: current.textAlign,
     )
   }
 }
 
-/** Block math (`$$...$$`). [textAlign] positions the equation: `LEFT`, `CENTER` (default) or `RIGHT`. */
+/**
+ * Block math (`$$...$$`).
+ *
+ * [alignment] places the equation inside its block. It is an [Alignment.Horizontal], like the
+ * table's, rather than a `TextAlign`: it positions the whole equation box, not lines of text, so
+ * `Justify` would mean nothing. [Alignment.Start], [Alignment.CenterHorizontally] (the default) and
+ * [Alignment.End] follow the reading direction; [AbsoluteAlignment.Left] and
+ * [AbsoluteAlignment.Right] pin a side regardless of it.
+ */
 @MarkdownStyleDsl
 class MathStyleScope internal constructor(
   existing: MathStylePatch?,
@@ -60,7 +70,7 @@ class MathStyleScope internal constructor(
   var padding: Dp? = existing?.padding
   var marginTop: Dp? = existing?.marginTop
   var marginBottom: Dp? = existing?.marginBottom
-  var textAlign: TextAlignment? = existing?.textAlign
+  var alignment: Alignment.Horizontal? = existing?.alignment
 
   internal fun toPatch(): MathStylePatch =
     MathStylePatch(
@@ -70,9 +80,20 @@ class MathStyleScope internal constructor(
       padding = padding,
       marginTop = marginTop,
       marginBottom = marginBottom,
-      textAlign = textAlign,
+      alignment = alignment,
     )
 }
+
+/** A custom horizontal alignment has no equivalent and falls back to the reading direction. */
+private fun Alignment.Horizontal.toMathTextAlignment(): TextAlignment =
+  when (this) {
+    Alignment.Start -> TextAlignment.START
+    Alignment.CenterHorizontally -> TextAlignment.CENTER
+    Alignment.End -> TextAlignment.END
+    AbsoluteAlignment.Left -> TextAlignment.LEFT
+    AbsoluteAlignment.Right -> TextAlignment.RIGHT
+    else -> TextAlignment.START
+  }
 
 /** Pending edits to [InlineMathStyle]. */
 @Immutable
@@ -103,7 +124,7 @@ class InlineMathStyleScope internal constructor(
  *
  * ```
  * markdownStyle {
- *   math { textAlign = TextAlignment.LEFT }
+ *   math { alignment = Alignment.Start }
  *   inlineMath { color = Color(0xFF7C3AED) }
  * }
  * ```

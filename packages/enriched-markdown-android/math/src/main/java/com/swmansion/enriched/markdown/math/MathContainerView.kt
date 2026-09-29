@@ -47,10 +47,13 @@ class MathContainerView(
   override val segmentMarginTop: Int get() = mathStyle.marginTop.toInt()
   override val segmentMarginBottom: Int get() = mathStyle.marginBottom.toInt()
 
+  // LEFT and RIGHT are absolute sides, so unlike START and END they must not flip in RTL layouts.
   private val mathGravity =
     when (mathStyle.textAlign) {
-      TextAlignment.START, TextAlignment.LEFT, TextAlignment.AUTO, TextAlignment.JUSTIFY -> Gravity.START
-      TextAlignment.END, TextAlignment.RIGHT -> Gravity.END
+      TextAlignment.START, TextAlignment.AUTO, TextAlignment.JUSTIFY -> Gravity.START
+      TextAlignment.END -> Gravity.END
+      TextAlignment.LEFT -> Gravity.LEFT
+      TextAlignment.RIGHT -> Gravity.RIGHT
       TextAlignment.CENTER -> Gravity.CENTER_HORIZONTAL
     }
 
