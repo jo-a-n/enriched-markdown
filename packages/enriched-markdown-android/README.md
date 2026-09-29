@@ -300,7 +300,8 @@ data class PixelatedSpoiler(val blockSize: Float = 6f) : CustomSpoilerOverlay {
 }
 
 class PixelatedSegment(private val blockSize: Float) : SpoilerSegmentOverlay() {
-  private val paint = Paint() // no filtering, so the blocks keep hard edges
+  // Paint filters bitmaps by default since Android 9; turn it off so the blocks keep hard edges.
+  private val paint = Paint().apply { isFilterBitmap = false }
   private val bounds = RectF()
   private var pixels: Bitmap? = null
 
