@@ -280,6 +280,7 @@ class SpoilerSegment {
   val start: Int; val end: Int                // this segment's slice of it
   val text: CharSequence                      // the slice, styled as it looks once revealed
   val index: Int; val count: Int              // this segment's place in the spoiler, reading order
+  val isRtl: Boolean                          // whether its paragraph runs right to left
   val frameTimeMillis: Long
   fun drawText(canvas: Canvas)                // the slice's glyphs, where the text view draws them
 }
@@ -349,6 +350,76 @@ the overlay fades. It lays out the line each time, so cache what you make from i
 
 **No backdrop needed.** The concealed text is drawn transparent, emoji and inline images included,
 so an overlay can leave parts of the segment clear.
+
+##### Custom overlays with `DrawScope`
+
+To draw with Compose's `DrawScope`, `Color` and `Brush` instead, extend
+`DrawScopeSpoilerSegmentOverlay` from the `compose` module and pass it the host:
+
+```kotlin
+abstract class DrawScopeSpoilerSegmentOverlay(host: SpoilerOverlayHost) : SpoilerSegmentOverlay() {
+  abstract fun DrawScope.draw(segment: SpoilerSegment)
+  open fun DrawScope.drawReveal(segment: SpoilerSegment, progress: Float)  // default: drawFadingOut()
+  protected fun DrawScope.drawFadingOut(segment: SpoilerSegment, progress: Float)
+}
+
+fun DrawScope.drawText(segment: SpoilerSegment)  // segment.drawText(), through the scope
+```
+
+The scope's `size` is the segment's, its origin is the segment's top-left corner, its density is the
+display's, and its `layoutDirection` follows the segment's paragraph (`segment.isRtl`). `isAnimated`,
+`onRemoved`, reveals and everything else work as above. This one sweeps a band of light across a
+rounded box, and wipes the box away in reading order when revealed:
+
+```kotlin
+data class ShimmerSpoiler(val periodMillis: Long = 1_500) : CustomSpoilerOverlay {
+  override fun createSegment(host: SpoilerOverlayHost, style: SpoilerStyle) =
+    ShimmerSegment(host, Color(style.color), periodMillis)
+}
+
+class ShimmerSegment(
+  host: SpoilerOverlayHost,
+  private val color: Color,
+  private val periodMillis: Long,
+) : DrawScopeSpoilerSegmentOverlay(host) {
+  override val isAnimated get() = true
+
+  override fun DrawScope.draw(segment: SpoilerSegment) {
+    drawRoundRect(color, cornerRadius = CornerRadius(4.dp.toPx()))
+    // A band of light sweeping across in reading order, once per period.
+    val phase = (segment.frameTimeMillis % periodMillis) / periodMillis.toFloat()
+    val band = 32.dp.toPx()
+    val travelled = -band + (size.width + 2 * band) * phase
+    val center = if (layoutDirection == LayoutDirection.Ltr) travelled else size.width - travelled
+    drawRect(
+      Brush.horizontalGradient(
+        listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
+        startX = center - band,
+        endX = center + band,
+      ),
+    )
+  }
+
+  // Wipes the box away in reading order, instead of the default fade.
+  override fun DrawScope.drawReveal(segment: SpoilerSegment, progress: Float) {
+    val covered = size.width * (1f - progress)
+    val left = if (layoutDirection == LayoutDirection.Ltr) size.width - covered else 0f
+    clipRect(left = left, right = left + covered) { draw(segment) }
+  }
+}
+
+EnrichedMarkdownText(markdown = content, spoilerOverlay = ShimmerSpoiler())
+```
+
+To keep the fade and add to it, call `drawFadingOut(segment, progress)` from `drawReveal`. To show
+the text through, `drawText(segment)` draws the glyphs into the scope, under its current transform.
+
+`createSegment` runs outside composition, so an overlay that needs a value from the composition,
+such as a theme color, takes it as a property, the way `ShimmerSpoiler` takes `periodMillis`, and is
+created with it in the composable. Since `EnrichedMarkdownText` rebuilds the overlays whenever `spoilerOverlay` is not `==` to the last
+one, keep such overlays data classes or objects, so each recomposition passes an equal value, or
+`remember` the instance. Don't build one from a lambda created during composition: two lambdas are
+never equal, so every recomposition would restart the overlay.
 
 ### `Md4cFlags`
 
