@@ -22,6 +22,8 @@ class MathInlineSpan private constructor(
   val latex: String,
   val fontSize: Float,
   private val textColor: Int,
+  /** Whether the source was `$$...$$`; the equation is typeset inline either way. */
+  val displayMode: Boolean,
   /** Null when the engine rejected [latex]. */
   private val renderer: RaTeXRenderer?,
 ) : ReplacementSpan(),
@@ -30,10 +32,12 @@ class MathInlineSpan private constructor(
   private val mathHeight = renderer?.let { ceil(it.totalHeightPx).toInt().coerceAtLeast(1) } ?: 0
   private val mathWidth = renderer?.let { ceil(it.widthPx).toInt().coerceAtLeast(1) } ?: 0
 
-  private val fallbackText: String? = if (renderer == null) "\$" + latex + "\$" else null
+  private val delimitedSource: String = if (displayMode) "\$\$" + latex + "\$\$" else "\$" + latex + "\$"
+
+  private val fallbackText: String? = if (renderer == null) delimitedSource else null
 
   /** The delimited source: core hands this straight to the clipboard, so it has to parse back. */
-  override fun toMarkdownSource(): String = "\$" + latex + "\$"
+  override fun toMarkdownSource(): String = delimitedSource
 
   /** Bare latex: core wraps it in the inline-code styling HTML export uses for `$...$`. */
   override fun toHtmlText(): String = latex
@@ -106,16 +110,17 @@ class MathInlineSpan private constructor(
       latex: String,
       fontSize: Float,
       textColor: Int,
+      displayMode: Boolean = false,
       onPluginEvent: PluginEventSink? = null,
     ): MathInlineSpan {
       val renderer =
         runRaTeX(
-          onFailure = { error -> onPluginEvent?.emit(LatexErrorEvent(latex, error.message, displayMode = false)) },
+          onFailure = { error -> onPluginEvent?.emit(LatexErrorEvent(latex, error.message, displayMode)) },
         ) {
           val displayList = RaTeXEngine.parseBlocking(latex, displayMode = false, color = textColor)
           RaTeXRenderer(displayList, fontSize) { RaTeXFontLoader.getTypeface(it) }
         }
-      return MathInlineSpan(latex, fontSize, textColor, renderer)
+      return MathInlineSpan(latex, fontSize, textColor, displayMode, renderer)
     }
   }
 }

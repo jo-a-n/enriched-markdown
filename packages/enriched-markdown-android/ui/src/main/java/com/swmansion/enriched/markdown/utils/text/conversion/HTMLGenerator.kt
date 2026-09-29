@@ -779,11 +779,6 @@ object HTMLGenerator {
     }
 
     val pluginSpan = text.getSpans(pos, pos + 1, PluginInlineSpan::class.java).firstOrNull() ?: return
-    val pluginHtml = pluginSpan.toHtml()
-    if (pluginHtml != null) {
-      html.append(pluginHtml)
-      return
-    }
     val pluginText = pluginSpan.toHtmlText()
     if (pluginText != null) {
       html

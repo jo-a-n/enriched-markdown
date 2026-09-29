@@ -33,7 +33,7 @@ import kotlin.math.ceil
 class MathContainerView(
   context: Context,
   styleConfig: StyleConfig,
-  private val selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig(),
+  var selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig(),
   private val onPluginEvent: PluginEventSink? = null,
 ) : FrameLayout(context),
   BlockSegmentView {

@@ -96,6 +96,30 @@ class PluginViewIntegrationTest {
   }
 
   @Test
+  fun eventsFromARenderOfReplacedOrRecycledMarkdownAreDropped() {
+    val view = EnrichedMarkdown(context)
+    val received = mutableListOf<PluginEvent>()
+    view.setOnPluginEventCallback { received.add(it) }
+
+    view.setMarkdownContent("a")
+    val streamedRender = view.renderPluginEventSink()
+    view.setMarkdownContent("ab")
+    streamedRender.emit(FakeEvent("streamed"))
+
+    val replacedRender = view.renderPluginEventSink()
+    view.setMarkdownContent("something else")
+    replacedRender.emit(FakeEvent("replaced"))
+    view.renderPluginEventSink().emit(FakeEvent("current"))
+
+    val recycledRender = view.renderPluginEventSink()
+    view.prepareForViewReuse()
+    view.setOnPluginEventCallback { received.add(it) }
+    recycledRender.emit(FakeEvent("recycled"))
+
+    assertEquals(listOf(FakeEvent("streamed"), FakeEvent("current")), received)
+  }
+
+  @Test
   fun reportedEventsAreBounded() {
     val view = EnrichedMarkdown(context)
     val received = mutableListOf<PluginEvent>()

@@ -64,7 +64,10 @@ class MathBlockSegment : BlockSegmentPlugin<MathSegmentPayload> {
     payload: MathSegmentPayload,
     config: SegmentViewConfig,
   ) {
-    (view as MathContainerView).applyPayload(payload)
+    (view as MathContainerView).apply {
+      selectionMenuConfig = config.selectionMenuConfig
+      applyPayload(payload)
+    }
   }
 
   override fun matchesView(view: View): Boolean = view is MathContainerView

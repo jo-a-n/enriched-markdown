@@ -86,17 +86,10 @@ class EnrichedMarkdown(
       override fun removeEldestEntry(eldest: MutableMap.MutableEntry<PluginEvent, Unit>?): Boolean = size > MAX_REPORTED_PLUGIN_EVENTS
     }
 
-  private val pluginEventSink =
-    PluginEventSink { event ->
-      // Plugins emit from the render thread (renderPayload, node renderers) and from the main
-      // thread (their views), so everything is funnelled onto the main thread: the dedup set and
-      // the callback then live on one thread and need no locking of their own.
-      if (Looper.myLooper() === mainHandler.looper) {
-        deliverPluginEvent(event)
-      } else {
-        mainHandler.post { deliverPluginEvent(event) }
-      }
-    }
+  /** Bumped with every clear of [reportedPluginEvents], so events from a superseded render are dropped. */
+  private var pluginEventGeneration = 0
+
+  private val pluginEventSink = PluginEventSink { event -> onMainThread { deliverPluginEvent(event) } }
 
   private var pendingSegments: List<RenderedSegment>? = null
   private var needsSegmentReset = false
@@ -108,7 +101,7 @@ class EnrichedMarkdown(
   fun setMarkdownContent(markdown: String) {
     if (baseMarkdown == markdown) return
     // Streaming appends; anything else is a new document.
-    if (!markdown.startsWith(baseMarkdown)) reportedPluginEvents.clear()
+    if (!markdown.startsWith(baseMarkdown)) forgetReportedPluginEvents()
     baseMarkdown = markdown
     // A checkbox tap mutates the child's spannable in place, leaving the segment
     // signature on the pre-tap AST. Dropping those toggles here can therefore land
@@ -184,10 +177,35 @@ class EnrichedMarkdown(
     onPluginEventCallback = callback
   }
 
+  /** The sink for one render's events, which the render thread may post after the document it rendered is gone. */
+  @VisibleForTesting
+  internal fun renderPluginEventSink(): PluginEventSink {
+    val generation = pluginEventGeneration
+    return PluginEventSink { event ->
+      onMainThread { if (generation == pluginEventGeneration) deliverPluginEvent(event) }
+    }
+  }
+
+  // Plugins emit from the render thread (renderPayload, node renderers) and from the main
+  // thread (their views), so everything is funnelled onto the main thread: the dedup set and
+  // the callback then live on one thread and need no locking of their own.
+  private fun onMainThread(block: () -> Unit) {
+    if (Looper.myLooper() === mainHandler.looper) {
+      block()
+    } else {
+      mainHandler.post(block)
+    }
+  }
+
   private fun deliverPluginEvent(event: PluginEvent) {
     if (reportedPluginEvents.put(event, Unit) == null) {
       onPluginEventCallback?.invoke(event)
     }
+  }
+
+  private fun forgetReportedPluginEvents() {
+    reportedPluginEvents.clear()
+    pluginEventGeneration++
   }
 
   /**
@@ -276,7 +294,7 @@ class EnrichedMarkdown(
     setSpoilerOverlay(SpoilerOverlay.Particles)
     setMarkdownContent("")
     taskListToggles.clear()
-    reportedPluginEvents.clear()
+    forgetReportedPluginEvents()
     pendingSegments = null
     applySegments(emptyList(), reset = true)
   }
@@ -300,6 +318,7 @@ class EnrichedMarkdown(
     val style = markdownStyle
     val markdown = currentMarkdown
     val plugins = EnrichedMarkdownPlugins.snapshot
+    val onPluginEvent = renderPluginEventSink()
 
     warnIfMathPluginMissing(plugins)
 
@@ -335,7 +354,7 @@ class EnrichedMarkdown(
             style,
             context,
             imageRequestHeaders,
-            onPluginEvent = pluginEventSink,
+            onPluginEvent = onPluginEvent,
             plugins = plugins,
           )
 

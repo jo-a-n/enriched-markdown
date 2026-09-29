@@ -53,6 +53,7 @@ class MathInlineRenderer(
         latex = latex,
         fontSize = fontSize,
         textColor = textColor,
+        displayMode = node.type == MarkdownASTNode.NodeType.LatexMathDisplay,
         onPluginEvent = config.onPluginEvent,
       )
 

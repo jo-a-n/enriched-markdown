@@ -58,6 +58,15 @@ class RaTeXUnavailableTest {
   }
 
   @Test
+  fun midLineDisplayMathReportsItsFailureInDisplayMode() {
+    val sink = RecordingSink()
+    val span = MathInlineSpan.layOut(latex = "x^2", fontSize = 16f, textColor = Color.BLACK, displayMode = true, onPluginEvent = sink)
+
+    assertEquals(true, (sink.events.single() as LatexErrorEvent).displayMode)
+    assertEquals("\$\$x^2\$\$", span.toMarkdownSource())
+  }
+
+  @Test
   fun blockPayloadRecordsTheFailureAndTheViewDrawsItsSourceInsteadOfThrowing() {
     val sink = RecordingSink()
     val payload = MathBlockSegment().renderPayload(latexMathDisplay("E = mc^2"), defaultStyle, context)

@@ -80,8 +80,8 @@ internal data class MarkdownStyleLayer(
           inlineImageStyle = inlineImage?.apply(base.inlineImageStyle, units),
           thematicBreakStyle = thematicBreak?.apply(base.thematicBreakStyle, units),
           tableStyle = table?.apply(base.tableStyle, resolveContext, units),
-          extensions = extensions,
           spoilerStyle = spoiler?.apply(base.spoilerStyle, units),
+          extensions = extensions,
         ),
     )
   }

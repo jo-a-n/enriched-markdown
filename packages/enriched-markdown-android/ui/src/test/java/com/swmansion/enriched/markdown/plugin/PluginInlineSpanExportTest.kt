@@ -44,14 +44,6 @@ class PluginInlineSpanExportTest {
   }
 
   @Test
-  fun htmlFromTheSpanIsInsertedVerbatimInsteadOfAsCode() {
-    val html = generateHTML(spannableWith(FakeInlineSpan("x", html = "<span class=\"chip\">@x</span>")))
-
-    assertTrue(html, html.contains("<span class=\"chip\">@x</span>"))
-    assertTrue(html, !html.contains("<code"))
-  }
-
-  @Test
   fun plainTextCopyAsksEachSpanForItsText() {
     val text =
       SpannableString("a ￼ b ￼ c").apply {

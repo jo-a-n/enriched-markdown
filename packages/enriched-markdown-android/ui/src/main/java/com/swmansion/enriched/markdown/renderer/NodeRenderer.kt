@@ -28,7 +28,7 @@ data class RendererConfig(
   val onPluginEvent: PluginEventSink? = null,
 )
 
-class RendererFactory(
+class RendererFactory internal constructor(
   private val config: RendererConfig,
   val context: Context,
   private val plugins: PluginSnapshot,

@@ -25,12 +25,8 @@ class StyleConfig(
   val tableStyle: TableStyle,
   val tableTypeface: Typeface? = null,
   val tableHeaderTypeface: Typeface? = null,
-  /**
-   * Styles owned by plugins, keyed by the [StyleExtensionKey] each plugin declares. Part of
-   * [equals], so values need structural equality (a data class) or every render looks restyled.
-   */
-  val extensions: Map<StyleExtensionKey<*>, Any> = emptyMap(),
   val spoilerStyle: SpoilerStyle = SpoilerStyle(),
+  val extensions: Map<StyleExtensionKey<*>, Any> = emptyMap(),
 ) {
   private val paragraphStyleDefault: ParagraphStyle = paragraphStyleDefault
   private var paragraphStyleOverride: ParagraphStyle? = null
@@ -103,8 +99,8 @@ class StyleConfig(
       tableStyle = tableStyle,
       tableTypeface = tableTypeface,
       tableHeaderTypeface = tableHeaderTypeface,
-      extensions = extensions + (key to value),
       spoilerStyle = spoilerStyle,
+      extensions = extensions + (key to value),
     )
 
   val needsJustify: Boolean

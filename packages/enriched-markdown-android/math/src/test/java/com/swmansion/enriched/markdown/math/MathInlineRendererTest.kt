@@ -5,6 +5,7 @@ package com.swmansion.enriched.markdown.math
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.defaultStyle
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.document
+import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexMathDisplay
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexMathInline
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.paragraph
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.render
@@ -14,6 +15,7 @@ import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.utils.text.conversion.MarkdownExtractor
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -73,6 +75,18 @@ class MathInlineRendererTest {
     val markdown = MarkdownExtractor.extractFromSpannable(styled, 0, styled.length)
 
     assertEquals("Area: \$\\pi r^2\$", markdown)
+  }
+
+  /** Typeset inline, but copied back out as the display math it was written as. */
+  @Test
+  fun midLineDisplayMathKeepsItsDoubleDollarDelimiters() {
+    val styled = render(document(paragraph(text("Energy: "), latexMathDisplay("E = mc^2"))))
+
+    val span = styled.getSpans(0, styled.length, MathInlineSpan::class.java).single()
+    val markdown = MarkdownExtractor.extractFromSpannable(styled, 0, styled.length)
+
+    assertTrue(span.displayMode)
+    assertEquals("Energy: \$\$E = mc^2\$\$", markdown)
   }
 
   /** HTML export wraps this in core's inline-code styling, so the `$` must not be repeated here. */
