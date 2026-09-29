@@ -29,10 +29,15 @@ The `compose` artifact pulls in internal `ui` and `parser` modules transitively.
 
 Features with a heavy dependency of their own ship as separate artifacts, installed at runtime. Today there is one: **math**.
 
+> [!NOTE]
+> The `math` artifact is not on Maven Central yet. It will be published with the next release.
+
+Once it is released, add it next to `compose`, using the same version for both:
+
 ```kotlin
 dependencies {
-  implementation("com.swmansion.enriched.markdown:compose:0.1.0")
-  implementation("com.swmansion.enriched.markdown:math:0.1.0") // only if you render LaTeX
+  implementation("com.swmansion.enriched.markdown:compose:<version>")
+  implementation("com.swmansion.enriched.markdown:math:<version>") // only if you render LaTeX
 }
 ```
 
