@@ -8,12 +8,17 @@ import kotlin.math.max
 import kotlin.math.sin
 import kotlin.random.Random
 
-// Uses a flat FloatArray (struct-of-arrays) to avoid GC pressure.
-class SpoilerParticleDrawable(
+/**
+ * [SpoilerOverlay.Particles]: a field of drifting dots, simulated in pixels. A reveal bursts the
+ * field outwards as it fades.
+ *
+ * Uses a flat FloatArray (struct-of-arrays) to avoid GC pressure.
+ */
+internal class ParticleSegmentOverlay(
   particleColor: Int,
   particleDensity: Float,
   particleSpeed: Float,
-) {
+) : SpoilerSegmentOverlay() {
   private var particleData = FloatArray(INITIAL_CAPACITY * STRIDE)
   private var particleCount = 0
 
@@ -30,19 +35,35 @@ class SpoilerParticleDrawable(
   private var accumulatedPrimaryBirths = 0f
   private var accumulatedSecondaryBirths = 0f
 
-  private val densityFactor = particleDensity / BASE_PARTICLE_DENSITY
-  private val speedFactor = particleSpeed / BASE_PARTICLE_SPEED
+  private val densityFactor = particleDensity / SpoilerOverlay.Particles.DEFAULT_DENSITY
+  private val speedFactor = particleSpeed / SpoilerOverlay.Particles.DEFAULT_SPEED
 
-  private var isRevealing = false
-  private var revealStartTime = -1L
-  private var revealCallback: (() -> Unit)? = null
+  private var isBursting = false
+  private var lastFrameTime = NO_FRAME
 
-  var overallAlpha = 1f
-    private set
-  var revealFinished = false
-    private set
+  override val isAnimated: Boolean get() = true
 
-  fun setSize(
+  override fun draw(
+    canvas: Canvas,
+    segment: SpoilerSegment,
+  ) {
+    setSize(segment.width, segment.height)
+    advanceTo(segment.frameTimeMillis)
+    drawParticles(canvas, overallAlpha = 1f)
+  }
+
+  override fun drawReveal(
+    canvas: Canvas,
+    segment: SpoilerSegment,
+    progress: Float,
+  ) {
+    if (!isBursting) burst()
+    setSize(segment.width, segment.height)
+    advanceTo(segment.frameTimeMillis)
+    drawParticles(canvas, overlayAlphaAt(progress))
+  }
+
+  private fun setSize(
     newWidth: Float,
     newHeight: Float,
   ) {
@@ -54,17 +75,14 @@ class SpoilerParticleDrawable(
     primaryBirthRate = max(3f, area * PRIMARY_DOT.densityFactor * densityFactor)
     secondaryBirthRate = max(1.5f, area * SECONDARY_DOT.densityFactor * densityFactor)
 
-    if (wasEmpty && newWidth > 0f && newHeight > 0f && !isRevealing && particleCount == 0) {
+    if (wasEmpty && newWidth > 0f && newHeight > 0f && !isBursting && particleCount == 0) {
       seedInitialParticles()
     }
   }
 
-  fun startReveal(onComplete: () -> Unit) {
-    if (isRevealing) return
-    isRevealing = true
-    revealStartTime = -1L
-    revealCallback = onComplete
-
+  // Scatters the field: spawning stops, and the dots speed up and fade faster.
+  private fun burst() {
+    isBursting = true
     for (index in 0 until particleCount) {
       val base = index * STRIDE
       particleData[base + VELOCITY_X] *= REVEAL_VELOCITY_MULTIPLIER
@@ -73,42 +91,26 @@ class SpoilerParticleDrawable(
     }
   }
 
-  fun update(
-    deltaTime: Float,
-    currentTimeMs: Long,
-  ) {
-    if (revealFinished) return
+  // Steps the simulation once per frame; a second draw in the same frame leaves it as it is.
+  private fun advanceTo(frameTimeMillis: Long) {
+    if (frameTimeMillis == lastFrameTime) return
+    val deltaTime =
+      if (lastFrameTime == NO_FRAME) {
+        16f / 1000f
+      } else {
+        ((frameTimeMillis - lastFrameTime).coerceIn(1, 64)).toFloat() / 1000f
+      }
+    lastFrameTime = frameTimeMillis
 
-    if (!isRevealing) spawnParticles(deltaTime)
+    if (!isBursting) spawnParticles(deltaTime)
     updateAndCompact(deltaTime)
-
-    if (isRevealing) {
-      if (revealStartTime < 0L) revealStartTime = currentTimeMs
-      val progress = ((currentTimeMs - revealStartTime).toFloat() / REVEAL_DURATION_MS).coerceIn(0f, 1f)
-      overallAlpha = overlayAlphaAt(progress)
-
-      if (progress >= 1f) finishReveal()
-    }
   }
 
-  fun finishReveal() {
-    if (!isRevealing || revealFinished) return
-    revealFinished = true
-    particleCount = 0
-    val callback = revealCallback
-    revealCallback = null
-    callback?.invoke()
-  }
-
-  fun draw(
+  private fun drawParticles(
     canvas: Canvas,
-    offsetX: Float,
-    offsetY: Float,
+    overallAlpha: Float,
   ) {
     if (width <= 0 || height <= 0 || particleCount == 0) return
-
-    canvas.save()
-    canvas.clipRect(offsetX, offsetY, offsetX + width, offsetY + height)
 
     for (index in 0 until particleCount) {
       val base = index * STRIDE
@@ -117,14 +119,12 @@ class SpoilerParticleDrawable(
 
       paint.color = Color.argb(alpha, colorRed, colorGreen, colorBlue)
       canvas.drawCircle(
-        offsetX + particleData[base + POSITION_X],
-        offsetY + particleData[base + POSITION_Y],
+        particleData[base + POSITION_X],
+        particleData[base + POSITION_Y],
         DOT_RADIUS * particleData[base + PARTICLE_SCALE],
         paint,
       )
     }
-
-    canvas.restore()
   }
 
   private fun updateAndCompact(deltaTime: Float) {
@@ -236,7 +236,6 @@ class SpoilerParticleDrawable(
     private const val PARTICLE_AGE = 8
     private const val STRIDE = 9
 
-    private const val BASE_PARTICLE_DENSITY = 8f
-    private const val BASE_PARTICLE_SPEED = 20f
+    private const val NO_FRAME = Long.MIN_VALUE
   }
 }

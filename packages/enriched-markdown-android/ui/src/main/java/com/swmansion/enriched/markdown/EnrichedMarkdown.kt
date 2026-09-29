@@ -57,7 +57,7 @@ class EnrichedMarkdown(
     private set
 
   /** How unrevealed `||spoiler||` text is concealed. */
-  var spoilerOverlay: SpoilerOverlay = SpoilerOverlay.Particles
+  var spoilerOverlay: SpoilerOverlay = SpoilerOverlay.Particles()
     private set
 
   private var imageRequestHeaders: Map<String, String> = emptyMap()
@@ -161,14 +161,15 @@ class EnrichedMarkdown(
   }
 
   /**
-   * Chooses the overlay that conceals unrevealed spoilers: drifting particles (the default) or
-   * a solid rounded block.
+   * Chooses the overlay that conceals unrevealed spoilers: drifting particles (the default), a
+   * solid rounded block, or a [com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay].
+   * Setting a value `==` to the current one keeps the overlays as they are.
    */
-  fun setSpoilerOverlay(mode: SpoilerOverlay) {
-    if (spoilerOverlay == mode) return
-    spoilerOverlay = mode
+  fun setSpoilerOverlay(overlay: SpoilerOverlay) {
+    if (spoilerOverlay == overlay) return
+    spoilerOverlay = overlay
     segmentViews.filterIsInstance<EnrichedMarkdownInternalText>().forEach {
-      it.spoilerOverlay = mode
+      it.spoilerOverlay = overlay
     }
   }
 
@@ -226,7 +227,7 @@ class EnrichedMarkdown(
     setOnLinkLongPressCallback(null)
     setOnTaskListItemPressCallback(null)
     setEnableTaskListItemToggle(true)
-    setSpoilerOverlay(SpoilerOverlay.Particles)
+    setSpoilerOverlay(SpoilerOverlay.Particles())
     setMarkdownContent("")
     taskListToggles.clear()
     pendingSegments = null
