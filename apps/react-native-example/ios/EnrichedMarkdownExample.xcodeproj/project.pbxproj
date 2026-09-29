@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		00E356F31AD99517003FC87E /* EnrichedMarkdownExampleTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 00E356F21AD99517003FC87E /* EnrichedMarkdownExampleTests.m */; };
 		00E356F91AD99517003FC87E /* SwiftLinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E356F81AD99517003FC87E /* SwiftLinker.swift */; };
-		ENRM862A01AD99517003FC87E /* ENRMLinkPillTextStorageTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = ENRM862F01AD99517003FC87E /* ENRMLinkPillTextStorageTests.mm */; };
 		029E4BE967864F599BC07069 /* Montserrat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = EFDFCE7DCD1A46B5B744D7EE /* Montserrat-Regular.ttf */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		266AF6A295504B0D86F4FC27 /* Poppins-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A7358B17E8E74D62A4B1C654 /* Poppins-Regular.ttf */; };
@@ -25,6 +24,7 @@
 		9BFD46416F6C43EFBD2EE56C /* Montserrat-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9BC709807BEE4A948F59B9EF /* Montserrat-Medium.ttf */; };
 		9E6DECF91246407194021F8B /* CourierPrime-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D495169E422740CF87E4E8EB /* CourierPrime-Regular.ttf */; };
 		A352776896814266B8C2320C /* Poppins-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DB9BD7A36CF349D19BD6AE5B /* Poppins-SemiBold.ttf */; };
+		C1D8E2A5B56496F31C0AE4ED /* ENRMLibraryTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3E9BDACA4FAC2E9EA3AAA542 /* ENRMLibraryTests.mm */; };
 		C5E681697D864CB241D83EFA /* libPods-EnrichedMarkdownExample-EnrichedMarkdownExampleTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A8E5ECDA77F0C61C263AE4C /* libPods-EnrichedMarkdownExample-EnrichedMarkdownExampleTests.a */; };
 /* End PBXBuildFile section */
 
@@ -43,13 +43,13 @@
 		00E356F11AD99517003FC87E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = EnrichedMarkdownExampleTests/Info.plist; sourceTree = "<group>"; };
 		00E356F21AD99517003FC87E /* EnrichedMarkdownExampleTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = EnrichedMarkdownExampleTests.m; sourceTree = "<group>"; };
 		00E356F81AD99517003FC87E /* SwiftLinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftLinker.swift; sourceTree = "<group>"; };
-		ENRM862F01AD99517003FC87E /* ENRMLinkPillTextStorageTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = ENRMLinkPillTextStorageTests.mm; path = "../../../packages/react-native-enriched-markdown/__tests__/ios/ENRMLinkPillTextStorageTests.mm"; sourceTree = SOURCE_ROOT; };
 		09EF1B231B420F64060CE9C8 /* libPods-EnrichedMarkdownExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-EnrichedMarkdownExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07F961A680F5B00A75B9A /* EnrichedMarkdownExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EnrichedMarkdownExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = EnrichedMarkdownExample/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = EnrichedMarkdownExample/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = EnrichedMarkdownExample/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-EnrichedMarkdownExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EnrichedMarkdownExample.debug.xcconfig"; path = "Target Support Files/Pods-EnrichedMarkdownExample/Pods-EnrichedMarkdownExample.debug.xcconfig"; sourceTree = "<group>"; };
+		3E9BDACA4FAC2E9EA3AAA542 /* ENRMLibraryTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ENRMLibraryTests.mm; sourceTree = "<group>"; };
 		431C95EEA90C4B3995118D3D /* Montserrat-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Montserrat-Bold.ttf"; path = "../assets/fonts/Montserrat-Bold.ttf"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-EnrichedMarkdownExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EnrichedMarkdownExample.release.xcconfig"; path = "Target Support Files/Pods-EnrichedMarkdownExample/Pods-EnrichedMarkdownExample.release.xcconfig"; sourceTree = "<group>"; };
 		5B7EB9410499542E8C5724F5 /* Pods-EnrichedMarkdownExample-EnrichedMarkdownExampleTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EnrichedMarkdownExample-EnrichedMarkdownExampleTests.debug.xcconfig"; path = "Target Support Files/Pods-EnrichedMarkdownExample-EnrichedMarkdownExampleTests/Pods-EnrichedMarkdownExample-EnrichedMarkdownExampleTests.debug.xcconfig"; sourceTree = "<group>"; };
@@ -94,7 +94,7 @@
 			children = (
 				00E356F21AD99517003FC87E /* EnrichedMarkdownExampleTests.m */,
 				00E356F81AD99517003FC87E /* SwiftLinker.swift */,
-				ENRM862F01AD99517003FC87E /* ENRMLinkPillTextStorageTests.mm */,
+				3E9BDACA4FAC2E9EA3AAA542 /* ENRMLibraryTests.mm */,
 				00E356F01AD99517003FC87E /* Supporting Files */,
 			);
 			path = EnrichedMarkdownExampleTests;
@@ -199,6 +199,7 @@
 			buildConfigurationList = 00E357021AD99517003FC87E /* Build configuration list for PBXNativeTarget "EnrichedMarkdownExampleTests" */;
 			buildPhases = (
 				A55EABD7B0C7F3A422A6CC61 /* [CP] Check Pods Manifest.lock */,
+				C8CECEEC034BD04FB51049C3 /* Generate library test sources */,
 				00E356EA1AD99517003FC87E /* Sources */,
 				00E356EB1AD99517003FC87E /* Frameworks */,
 				00E356EC1AD99517003FC87E /* Resources */,
@@ -397,6 +398,22 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+		C8CECEEC034BD04FB51049C3 /* Generate library test sources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Generate library test sources";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/ENRMGeneratedTestSources.h",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/../scripts/generate-ios-test-sources.sh\"\n";
+		};
 		E235C05ADACE081382539298 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -440,7 +457,7 @@
 			files = (
 				00E356F31AD99517003FC87E /* EnrichedMarkdownExampleTests.m in Sources */,
 				00E356F91AD99517003FC87E /* SwiftLinker.swift in Sources */,
-				ENRM862A01AD99517003FC87E /* ENRMLinkPillTextStorageTests.mm in Sources */,
+				C1D8E2A5B56496F31C0AE4ED /* ENRMLibraryTests.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -476,6 +493,7 @@
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(DERIVED_FILE_DIR)",
 					"${PODS_ROOT}/../../../../packages/core/cpp/md4c",
 					"${PODS_ROOT}/../../../../packages/core/cpp/parser",
 					"${PODS_ROOT}/../../../../packages/core/cpp/highlight",
@@ -524,6 +542,7 @@
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(DERIVED_FILE_DIR)",
 					"${PODS_ROOT}/../../../../packages/core/cpp/md4c",
 					"${PODS_ROOT}/../../../../packages/core/cpp/parser",
 					"${PODS_ROOT}/../../../../packages/core/cpp/highlight",
