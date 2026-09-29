@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.text.Layout
 import android.text.Spannable
 import android.util.TypedValue
 import android.view.View
@@ -99,11 +100,37 @@ class CodeBackgroundPaintingTest {
     return Drawn(textView, rendered, canvas.backgrounds)
   }
 
-  private fun assertCoversTheCode(drawn: Drawn) {
+  /**
+   * Asserts the background spans the glyphs from [from] to [to]. Their x positions are compared by
+   * their min and max, since in right-to-left text [from] lies to the right of [to].
+   */
+  private fun assertCoversTheCode(
+    drawn: Drawn,
+    from: Int = drawn.codeStart,
+    to: Int = drawn.codeEnd,
+  ) {
     val layout = requireNotNull(drawn.textView.layout)
     val background = drawn.backgrounds.single()
-    assertEquals(layout.getPrimaryHorizontal(drawn.codeStart), background.left, 0.01f)
-    assertEquals(layout.getPrimaryHorizontal(drawn.codeEnd), background.right, 0.01f)
+    val fromX = layout.getPrimaryHorizontal(from)
+    val toX = layout.getPrimaryHorizontal(to)
+    assertTrue("The code must have a width for this to be meaningful", fromX != toX)
+    assertEquals(minOf(fromX, toX), background.left, 0.01f)
+    assertEquals(maxOf(fromX, toX), background.right, 0.01f)
+  }
+
+  /**
+   * Draws [code] followed by a word too long to share its line, so the first line wraps right
+   * after the code's trailing space and the code's end offset is also the next line's start.
+   */
+  private fun drawCodeEndingAWrappedLine(
+    code: String,
+    longWord: String,
+  ): Drawn {
+    val drawn = draw(document(paragraph(code(code), text(longWord))))
+    val layout = requireNotNull(drawn.textView.layout)
+    assertTrue("The text must wrap for this to be meaningful", layout.lineCount > 1)
+    assertEquals("The first line must end where the code does", drawn.codeEnd, layout.getLineEnd(0))
+    return drawn
   }
 
   @Test
@@ -117,6 +144,39 @@ class CodeBackgroundPaintingTest {
 
     assertTrue("The line must be centered for this to be meaningful", drawn.backgrounds.single().left > WIDTH / 4f)
     assertCoversTheCode(drawn)
+  }
+
+  @Test
+  fun theBackgroundFollowsRightAlignedText() {
+    val drawn = draw(document(paragraph(text("call "), code("render()"), text(" once"))), style(TextAlignment.RIGHT))
+
+    assertTrue("The line must be right-aligned for this to be meaningful", drawn.backgrounds.single().left > WIDTH / 2f)
+    assertCoversTheCode(drawn)
+  }
+
+  @Test
+  fun theBackgroundCoversRightToLeftCode() {
+    val drawn = draw(document(paragraph(text("קרא ל"), code("שלום"), text(" פעם אחת"))))
+
+    assertEquals(Layout.DIR_RIGHT_TO_LEFT, requireNotNull(drawn.textView.layout).getParagraphDirection(0))
+    assertTrue("The line must start on the right for this to be meaningful", drawn.backgrounds.single().left > WIDTH / 2f)
+    assertCoversTheCode(drawn)
+  }
+
+  @Test
+  fun codeEndingAWrappedLineStopsAtItsLastGlyph() {
+    val drawn = drawCodeEndingAWrappedLine("render() ", "a".repeat(200))
+
+    // The trailing space where the line wraps is not drawn, so neither is its background.
+    assertCoversTheCode(drawn, to = drawn.codeEnd - 1)
+  }
+
+  @Test
+  fun rightToLeftCodeEndingAWrappedLineStopsAtItsLastGlyph() {
+    val drawn = drawCodeEndingAWrappedLine("שלום ", "א".repeat(200))
+
+    assertEquals(Layout.DIR_RIGHT_TO_LEFT, requireNotNull(drawn.textView.layout).getParagraphDirection(0))
+    assertCoversTheCode(drawn, to = drawn.codeEnd - 1)
   }
 
   @Test
