@@ -35,6 +35,13 @@ class SpoilerSegment internal constructor(
   var baseline: Float = 0f
     internal set
 
+  /**
+   * Whether the paragraph the segment is in runs right to left, for effects with a direction (a
+   * wipe, a sweep) to follow the reading order. Segments are still numbered in reading order.
+   */
+  var isRtl: Boolean = false
+    internal set
+
   /** This segment's place among the spoiler's segments, in reading order. */
   var index: Int = 0
     internal set
@@ -95,6 +102,7 @@ class SpoilerSegment internal constructor(
     lineBaseline: Float,
     paddingLeft: Float,
     paddingTop: Float,
+    isRtl: Boolean,
     index: Int,
     count: Int,
     frameTimeMillis: Long,
@@ -105,6 +113,7 @@ class SpoilerSegment internal constructor(
     baseline = lineBaseline + paddingTop - rect.top
     layoutX = paddingLeft - rect.left
     layoutY = paddingTop - rect.top
+    this.isRtl = isRtl
     this.index = index
     this.count = count
     this.frameTimeMillis = frameTimeMillis

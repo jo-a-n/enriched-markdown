@@ -263,6 +263,17 @@ class SpoilerCustomOverlayTest {
     assertEquals(metrics.descent - metrics.ascent, segment.height, 1f)
   }
 
+  @Test
+  fun theSegmentKnowsWhichWayItsParagraphRuns() {
+    val ltr = Probe()
+    val rtl = Probe()
+    harness(document(paragraph(text("plain "), spoiler(text("secret")))), ProbeOverlay("a", ltr)).draw()
+    harness(document(paragraph(text("שלום "), spoiler(text("סוד")))), ProbeOverlay("a", rtl)).draw()
+
+    assertFalse(requireNotNull(ltr.created.single().segment).isRtl)
+    assertTrue(requireNotNull(rtl.created.single().segment).isRtl)
+  }
+
   // MARK: Reveal
 
   @Test

@@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.spoiler
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.text.Layout
 import android.text.Spannable
 import android.text.Spanned
 import android.text.TextPaint
@@ -111,6 +112,7 @@ internal class SpoilerOverlayDrawer(
           lineBaseline = ctx.layout.getLineBaseline(lineSegment.line).toFloat(),
           paddingLeft = ctx.paddingLeft,
           paddingTop = ctx.paddingTop,
+          isRtl = ctx.layout.getParagraphDirection(lineSegment.line) == Layout.DIR_RIGHT_TO_LEFT,
           index = index,
           count = lineSegments.size,
           frameTimeMillis = now,
