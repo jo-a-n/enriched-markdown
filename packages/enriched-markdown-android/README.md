@@ -154,22 +154,14 @@ markdownStyle {
 
 Rendering `^text^`/`~text~` as superscript/subscript nodes requires enabling the corresponding `Md4cFlags` when parsing.
 
-`spoiler` styles the overlay that conceals `||spoiler||` text. `color` paints the particles and fills
-the solid block; `particles { density, speed }` only apply to `SpoilerOverlay.Particles` and are
-unitless multipliers over the defaults shown below, and `solid { cornerRadius }` only applies to
-`SpoilerOverlay.Solid`. The concealed text itself is drawn transparent, so the overlay works over any
-background without being told what that background is.
+`spoiler` colors the overlay that conceals `||spoiler||` text: `color` paints the particles and fills
+the solid block. The effect itself, and its tuning, is the `spoilerOverlay` parameter of
+`EnrichedMarkdownText` (see [Spoiler overlays](#spoiler-overlays)). The concealed text is drawn
+transparent, so the overlay works over any background without being told what that background is.
 
 ```kotlin
 markdownStyle {
-  spoiler {
-    color = Color(0xFF374151)
-    particles {
-      density = 8f
-      speed = 20f
-    }
-    solid { cornerRadius = 4.dp }
-  }
+  spoiler { color = Color(0xFF374151) }
 }
 ```
 
@@ -190,7 +182,7 @@ fun EnrichedMarkdownText(
   onLinkLongClick: (String) -> Unit = {},
   onTaskListItemToggle: (TaskListItemToggle) -> Unit = {},
   taskListToggleEnabled: Boolean = true,
-  spoilerOverlay: SpoilerOverlay = SpoilerOverlay.Particles,
+  spoilerOverlay: SpoilerOverlay = SpoilerOverlay.Particles(),
 )
 ```
 
@@ -205,7 +197,7 @@ fun EnrichedMarkdownText(
 | `onLinkLongClick` | Called when a link is long-pressed |
 | `onTaskListItemToggle` | Called after a task list checkbox tap toggles the item |
 | `taskListToggleEnabled` | Whether a checkbox tap toggles the item (default `true`) |
-| `spoilerOverlay` | How `\|\|spoiler\|\|` text is concealed: `SpoilerOverlay.Particles` (default) or `SpoilerOverlay.Solid` |
+| `spoilerOverlay` | How `\|\|spoiler\|\|` text is concealed: `SpoilerOverlay.Particles()` (default), `SpoilerOverlay.Solid()`, or a `CustomSpoilerOverlay` (see [Spoiler overlays](#spoiler-overlays)) |
 
 Style defaults come from the nearest `MarkdownTheme`.
 
@@ -238,6 +230,125 @@ EnrichedMarkdownText(
 `taskListToggleEnabled = false` makes checkbox taps fully inert: no visual
 toggle and no `onTaskListItemToggle`. Text selection and links are unaffected
 either way.
+
+#### Spoiler overlays
+
+```kotlin
+package com.swmansion.enriched.markdown.spoiler
+
+sealed interface SpoilerOverlay {
+  data class Particles(val density: Float = 8f, val speed: Float = 20f) : SpoilerOverlay
+  data class Solid(val cornerRadius: Float = 4f) : SpoilerOverlay   // dp
+}
+```
+
+The two built-in overlays take their colors from the `spoiler { }` style and their tuning from
+their own parameters. `density` and `speed` scale the particle field linearly from its defaults, so
+`density = 16f` puts in twice as many particles. `cornerRadius` is in dp.
+
+```kotlin
+import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
+
+EnrichedMarkdownText(
+  markdown = content,
+  spoilerOverlay = SpoilerOverlay.Particles(density = 12f, speed = 30f),
+)
+```
+
+##### Custom overlays
+
+Any effect can stand in for the built-ins. Implement `CustomSpoilerOverlay` to build a
+`SpoilerSegmentOverlay`, which draws the effect on the text view's canvas:
+
+```kotlin
+interface CustomSpoilerOverlay : SpoilerOverlay {
+  fun createSegment(host: SpoilerOverlayHost, style: SpoilerStyle): SpoilerSegmentOverlay
+}
+
+abstract class SpoilerSegmentOverlay {
+  abstract fun draw(canvas: Canvas, segment: SpoilerSegment)
+  open fun drawReveal(canvas: Canvas, segment: SpoilerSegment, progress: Float)  // default: draw() fading out
+  open val isAnimated: Boolean                                                   // default: false
+  open fun onRemoved()
+}
+
+class SpoilerSegment {
+  val width: Float
+  val height: Float
+  val baseline: Float                         // the line's baseline, from the segment's top
+  val spoilerStart: Int; val spoilerEnd: Int  // the whole spoiler, in the view's text
+  val start: Int; val end: Int                // this segment's slice of it
+  val text: CharSequence                      // the slice, styled as it looks once revealed
+  val index: Int; val count: Int              // this segment's place in the spoiler, reading order
+  val frameTimeMillis: Long
+  fun drawText(canvas: Canvas)                // the slice's glyphs, where the text view draws them
+}
+
+interface SpoilerOverlayHost {
+  val density: Float    // pixels per dp
+  fun invalidate()      // one more draw, e.g. after an asset loads
+}
+```
+
+This one pixelates the hidden words:
+
+```kotlin
+data class PixelatedSpoiler(val blockSize: Float = 6f) : CustomSpoilerOverlay {
+  override fun createSegment(host: SpoilerOverlayHost, style: SpoilerStyle) =
+    PixelatedSegment(blockSize * host.density)
+}
+
+class PixelatedSegment(private val blockSize: Float) : SpoilerSegmentOverlay() {
+  private val paint = Paint() // no filtering, so the blocks keep hard edges
+  private val bounds = RectF()
+  private var pixels: Bitmap? = null
+
+  override fun draw(canvas: Canvas, segment: SpoilerSegment) {
+    val columns = (segment.width / blockSize).toInt().coerceAtLeast(1)
+    val rows = (segment.height / blockSize).toInt().coerceAtLeast(1)
+    val image = pixels?.takeIf { it.width == columns && it.height == rows }
+      ?: Bitmap.createBitmap(columns, rows, Bitmap.Config.ARGB_8888).also { bitmap ->
+        // The text, shrunk to one pixel per block.
+        Canvas(bitmap).apply {
+          scale(columns / segment.width, rows / segment.height)
+          segment.drawText(this)
+        }
+        pixels = bitmap
+      }
+    bounds.set(0f, 0f, segment.width, segment.height)
+    canvas.drawBitmap(image, null, bounds, paint)
+  }
+
+  override fun onRemoved() {
+    pixels = null
+  }
+}
+
+EnrichedMarkdownText(markdown = content, spoilerOverlay = PixelatedSpoiler())
+```
+
+A spoiler gets one segment overlay per line. The view creates it when the segment comes into view
+and removes it when the spoiler is revealed, when the text reflows onto different lines, or when the
+overlay or the style changes, so keep `createSegment` cheap. The canvas is moved to the segment's
+top-left corner and clipped to its size. The view rebuilds its overlays only when the new
+`spoilerOverlay` is not `==` to the old one, so make custom overlays data classes or objects, or
+`remember` them: a plain class created in every recomposition restarts every overlay each time.
+
+**Animation.** An overlay that moves on its own returns `true` from `isAnimated`, and the view then
+draws every frame while it is on screen. Advance the effect from `segment.frameTimeMillis`.
+
+**Reveals.** The view runs the reveal, 450 ms for every overlay, and calls `drawReveal` each frame
+with `progress` rising from 0 towards 1, fading the text in underneath on the same clock. The
+default draws `draw()` fading out; override it to shape the reveal (a burst, a wipe), and call
+`super` to keep the fade. Every segment of a spoiler reveals at once; for a line-by-line effect,
+stagger by `segment.index`.
+
+**Showing the text through.** `drawText` draws the segment's text as it looks once revealed, each
+glyph where the text view draws it, so a blur, pixelation or scramble lines up with the real text as
+the overlay fades. It lays out the line each time, so cache what you make from it, as above.
+
+**No backdrop needed.** The concealed text is drawn transparent, emoji and inline images included,
+so an overlay can leave parts of the segment clear.
 
 ### `Md4cFlags`
 
