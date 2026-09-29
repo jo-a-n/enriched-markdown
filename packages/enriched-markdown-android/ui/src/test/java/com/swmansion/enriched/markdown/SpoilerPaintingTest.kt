@@ -27,9 +27,11 @@ import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport.render
 import com.swmansion.enriched.markdown.test.TestAstFactory.code
 import com.swmansion.enriched.markdown.test.TestAstFactory.document
 import com.swmansion.enriched.markdown.test.TestAstFactory.heading
+import com.swmansion.enriched.markdown.test.TestAstFactory.image
 import com.swmansion.enriched.markdown.test.TestAstFactory.paragraph
 import com.swmansion.enriched.markdown.test.TestAstFactory.spoiler
 import com.swmansion.enriched.markdown.test.TestAstFactory.text
+import com.swmansion.enriched.markdown.utils.text.ImageCache
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -69,7 +71,7 @@ class SpoilerPaintingTest {
    * was painted in.
    */
   private class RecordingCanvas(
-    bitmap: Bitmap,
+    val bitmap: Bitmap,
   ) : Canvas(bitmap) {
     private val currentMatrix = Matrix()
     val roundRects = mutableListOf<Pair<RectF, Int>>()
@@ -327,6 +329,40 @@ class SpoilerPaintingTest {
 
     assertTrue(test.drawText().pathColors.any { Color.alpha(it) > 0 })
   }
+
+  // Color glyphs take the paint's alpha like any other, so the concealment covers them.
+  @Test
+  fun anEmojiUnderAConcealedSpoilerDrawsNoInk() {
+    val test = harness(document(paragraph(spoiler(text("\uD83D\uDE00")))))
+
+    assertEquals(0, test.drawText().bitmap.inkedPixels())
+
+    test.spans.single().markRevealed()
+    assertTrue("The emoji should draw once revealed", test.drawText().bitmap.inkedPixels() > 0)
+  }
+
+  // A drawable ignores the paint, so an image has to be concealed explicitly.
+  @Test
+  fun anInlineImageUnderAConcealedSpoilerIsNotDrawn() {
+    val url = "test://spoiler-inline-image"
+    ImageCache.putOriginal(url, Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) })
+    val test = harness(document(paragraph(text("see "), spoiler(image(url)))))
+
+    assertEquals(0, test.drawText().bitmap.redPixels())
+
+    test.spans.single().textAlpha = 0.5f
+    val halfway = test.drawText().bitmap
+    assertTrue("The image should fade in with the text", halfway.redPixels() > 0)
+
+    test.spans.single().markRevealed()
+    assertTrue(test.drawText().bitmap.redPixels() > 0)
+  }
+
+  private fun Bitmap.inkedPixels(): Int = pixels().count { Color.alpha(it) > 0 }
+
+  private fun Bitmap.redPixels(): Int = pixels().count { Color.alpha(it) > 0 && Color.red(it) > 128 && Color.green(it) < 64 }
+
+  private fun Bitmap.pixels(): IntArray = IntArray(width * height).also { getPixels(it, 0, width, 0, 0, width, height) }
 
   // MARK: Reveal transitions
 
