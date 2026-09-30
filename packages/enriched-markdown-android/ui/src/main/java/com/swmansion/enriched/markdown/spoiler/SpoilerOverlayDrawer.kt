@@ -29,9 +29,10 @@ internal class SpoilerOverlayDrawer(
 
   private class Reveal(
     val startTime: Long,
+    val durationMillis: Long,
     val onComplete: () -> Unit,
   ) {
-    fun progressAt(time: Long): Float = ((time - startTime).toFloat() / REVEAL_DURATION_MS).coerceIn(0f, 1f)
+    fun progressAt(time: Long): Float = if (durationMillis <= 0) 1f else ((time - startTime).toFloat() / durationMillis).coerceIn(0f, 1f)
   }
 
   private class LineSegment(
@@ -150,7 +151,7 @@ internal class SpoilerOverlayDrawer(
     val inFlight = reveals[span]
     if (inFlight != null) {
       reveals[span] =
-        Reveal(inFlight.startTime) {
+        Reveal(inFlight.startTime, inFlight.durationMillis) {
           inFlight.onComplete()
           onAllComplete()
         }
@@ -164,7 +165,8 @@ internal class SpoilerOverlayDrawer(
       return
     }
     span.markRevealing()
-    reveals[span] = Reveal(AnimationUtils.currentAnimationTimeMillis(), onAllComplete)
+    reveals[span] =
+      Reveal(AnimationUtils.currentAnimationTimeMillis(), spoilerOverlay.revealDurationMillis, onAllComplete)
     textViewReference.get()?.invalidate()
   }
 

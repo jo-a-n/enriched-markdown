@@ -69,6 +69,16 @@ class SpoilerCustomOverlayTest {
     ): SpoilerSegmentOverlay = ProbeSegment(style, drawsText).also { probe.created.add(it) }
   }
 
+  private data class TimedProbeOverlay(
+    val probe: Probe,
+    override val revealDurationMillis: Long,
+  ) : CustomSpoilerOverlay {
+    override fun createSegment(
+      host: SpoilerOverlayHost,
+      style: SpoilerStyle,
+    ): SpoilerSegmentOverlay = ProbeSegment(style, drawsText = false).also { probe.created.add(it) }
+  }
+
   private class ProbeSegment(
     val style: SpoilerStyle,
     private val drawsText: Boolean,
@@ -290,6 +300,48 @@ class SpoilerCustomOverlayTest {
     assertEquals(0.5f, segment.revealProgress.single(), 0.001f)
     // Halfway through, the overlay is at a quarter of its opacity and the text at the rest.
     assertEquals(0.75f, test.span.textAlpha, 0.001f)
+  }
+
+  @Test
+  fun anOverlaysRevealDurationSetsTheClock() {
+    val probe = Probe()
+    val test = harness(document(paragraph(spoiler(text("secret")))), TimedProbeOverlay(probe, 1_000))
+    test.draw()
+    var completed = false
+
+    test.drawer.revealSpan(test.span) { completed = true }
+    test.advanceBy(250)
+    test.draw()
+
+    val segment = probe.created.single()
+    assertEquals(0.25f, segment.revealProgress.single(), 0.001f)
+    assertEquals(1f - 0.75f * 0.75f, test.span.textAlpha, 0.001f)
+
+    test.advanceBy(450)
+    test.draw()
+    assertFalse("Past the default duration, a longer reveal is still running", completed)
+
+    test.advanceBy(300)
+    test.draw()
+    assertTrue(completed)
+    assertTrue(test.span.revealed)
+  }
+
+  @Test
+  fun aZeroRevealDurationRevealsAtOnce() {
+    val probe = Probe()
+    val test = harness(document(paragraph(spoiler(text("secret")))), TimedProbeOverlay(probe, 0))
+    test.draw()
+    var completed = false
+
+    test.drawer.revealSpan(test.span) { completed = true }
+    test.draw()
+
+    val segment = probe.created.single()
+    assertTrue(completed)
+    assertTrue(test.span.revealed)
+    assertEquals(1, segment.removals)
+    assertTrue("No reveal frame is drawn", segment.revealProgress.isEmpty())
   }
 
   @Test

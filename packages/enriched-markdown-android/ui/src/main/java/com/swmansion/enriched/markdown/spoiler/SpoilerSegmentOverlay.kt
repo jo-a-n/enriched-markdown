@@ -25,7 +25,8 @@ abstract class SpoilerSegmentOverlay {
    * Draws the segment as it is revealed, once per frame, with [progress] rising from 0 towards 1;
    * the overlay is removed when it gets there. The text fades in underneath on the same clock, and
    * every segment of the spoiler reveals together: to go line by line, stagger by
-   * [SpoilerSegment.index]. The duration is the view's, so shape the effect from [progress].
+   * [SpoilerSegment.index]. The view keeps the clock, over
+   * [CustomSpoilerOverlay.revealDurationMillis], so shape the effect from [progress].
    *
    * The default draws [draw] fading out, as the text fades in. Override it for an effect of your
    * own; calling `super` keeps the fade.

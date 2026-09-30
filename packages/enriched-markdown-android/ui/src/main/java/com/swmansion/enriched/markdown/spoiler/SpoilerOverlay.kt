@@ -58,6 +58,13 @@ interface CustomSpoilerOverlay : SpoilerOverlay {
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
   ): SpoilerSegmentOverlay
+
+  /**
+   * How long a reveal takes, in milliseconds: [SpoilerSegmentOverlay.drawReveal]'s progress and
+   * the text fading in underneath both run over it. Zero or less reveals at once, without calling
+   * `drawReveal`.
+   */
+  val revealDurationMillis: Long get() = REVEAL_DURATION_MS
 }
 
 /** The text view a [SpoilerSegmentOverlay] draws into. */
@@ -74,6 +81,9 @@ interface SpoilerOverlayHost {
    */
   fun invalidate()
 }
+
+internal val SpoilerOverlay.revealDurationMillis: Long
+  get() = if (this is CustomSpoilerOverlay) revealDurationMillis else REVEAL_DURATION_MS
 
 internal fun SpoilerOverlay.createSegmentOverlay(
   host: SpoilerOverlayHost,
