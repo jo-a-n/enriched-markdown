@@ -176,8 +176,29 @@ benchmark library's ~90 s cool-down otherwise counts against the 10 s main-threa
 deadline and fails the test.
 
 
-## Not in CI
+### Comparing two commits
 
-This module is deliberately absent from `.github/workflows/ci.yml`. Microbenchmarks need
-a physical device with locked clocks to produce stable numbers; a shared CI runner would
-only produce noise.
+`tools/compare.mjs` runs the benchmark on this checkout and on another ref, back to back on
+one device, and prints both medians with the head/base ratio. The other ref is built in a
+throwaway worktree, and each side runs its own copy of the benchmark, so a change to the
+benchmark itself makes the two sides incomparable.
+
+```sh
+yarn workspace @enriched-markdown/android bench:android-native --base main
+# or, from this package:
+node display-benchmark/tools/compare.mjs --base main --documents complex_large --serial <serial>
+```
+
+On an emulator it suppresses the benchmark library's `EMULATOR` error; the ratio then
+shows the direction of a change, not its size.
+
+## CI
+
+This module is deliberately absent from `.github/workflows/ci.yml`: microbenchmarks need a
+physical device with locked clocks to produce stable numbers.
+
+`.github/workflows/android-benchmarks.yml` runs the comparison on demand, on an emulator.
+Comment `/benchmark android` on a pull request (write access required), or start the
+workflow from the Actions tab with the pull request number. It measures the pull request
+head against the tip of `main` and comments the table, with both commits, on the pull
+request. Those numbers only show the direction of a change; confirm it on a physical device.

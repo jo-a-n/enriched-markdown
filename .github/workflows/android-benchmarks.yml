@@ -1,0 +1,192 @@
+name: Android benchmarks
+
+# On demand, not on every pull request: comment `/benchmark android` on a pull
+# request, or start it from the Actions tab with the pull request number. The
+# display benchmark runs on the pull request head and on the tip of main, back
+# to back on one emulator, and the table is posted as a comment.
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number
+        required: true
+        type: number
+
+# Every comment on a pull request starts a run. The ones that are not a
+# benchmark request get a group of their own, so they cannot cancel one that is.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'issue_comment' && !startsWith(github.event.comment.body, '/benchmark android')
+    && format('android-benchmarks-ignored-{0}', github.run_id)
+    || format('android-benchmarks-{0}', github.event.issue.number || inputs.pull_request) }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    # A comment-triggered run builds and runs the pull request's code, so only
+    # people with write access may start one.
+    if: >-
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/benchmark android') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      head: ${{ steps.pr.outputs.head }}
+      base: ${{ steps.pr.outputs.base }}
+      behind: ${{ steps.pr.outputs.behind }}
+    steps:
+      - name: Acknowledge the comment
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content=rocket --silent || true
+
+      # Both commits are pinned here, so a push during the run changes neither
+      # what is measured nor what the comment says was measured.
+      - name: Resolve the commits
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number || inputs.pull_request }}
+        run: |
+          set -euo pipefail
+          HEAD=$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+          BASE=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [[ -z "$HEAD" || -z "$BASE" ]]; then
+            echo "::error::Could not resolve the head of pull request #$NUMBER or the tip of main"
+            exit 1
+          fi
+          # Informational only: a head behind main also measures what main gained since.
+          BEHIND=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq .behind_by || echo "")
+          {
+            echo "number=$NUMBER"
+            echo "head=$HEAD"
+            echo "base=$BASE"
+            echo "behind=$BEHIND"
+          } >> "$GITHUB_OUTPUT"
+
+  benchmark:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Runs the pull request's code, so the token can only read.
+    permissions:
+      contents: read
+    steps:
+      # The tooling comes from main; the pull request is measured in a worktree,
+      # which also works for branches older than the script.
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.resolve.outputs.base }}
+          fetch-depth: 0
+
+      # Pull requests from forks are only reachable through their pull ref.
+      - name: Fetch the pull request
+        env:
+          NUMBER: ${{ needs.resolve.outputs.number }}
+          HEAD: ${{ needs.resolve.outputs.head }}
+        run: |
+          git fetch --no-tags origin "+refs/pull/$NUMBER/head:refs/remotes/pull/$NUMBER"
+          git cat-file -e "$HEAD^{commit}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup Android
+        uses: ./.github/actions/setup-android
+        with:
+          gradle-wrapper-properties: packages/enriched-markdown-android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # An ATD image runs fewer background services than a regular one, which
+      # is less noise under the measurements. The benchmark library refuses to
+      # measure a locked screen, so it is kept on and unlocked.
+      - name: Compare the pull request against main
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 4096M
+          script: |
+            adb shell svc power stayon true
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
+            node packages/enriched-markdown-android/display-benchmark/tools/compare.mjs --head ${{ needs.resolve.outputs.head }} --base ${{ needs.resolve.outputs.base }} --markdown "$RUNNER_TEMP/android-benchmarks/results.md" --output "$RUNNER_TEMP/android-benchmarks"
+
+      - name: Upload the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-benchmarks
+          path: ${{ runner.temp }}/android-benchmarks
+          if-no-files-found: ignore
+
+  # Separate from the job that runs the pull request's code, so that code never
+  # holds a token that can write to the repository.
+  report:
+    needs: [resolve, benchmark]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download the results
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: android-benchmarks
+          path: results
+
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ needs.resolve.outputs.number }}
+          HEAD: ${{ needs.resolve.outputs.head }}
+          BASE: ${{ needs.resolve.outputs.base }}
+          BEHIND: ${{ needs.resolve.outputs.behind }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit
+        run: |
+          set -euo pipefail
+          {
+            echo "### Android display benchmark"
+            echo
+            echo "**head** #$NUMBER at [\`${HEAD:0:10}\`]($COMMIT_URL/$HEAD) · **base** \`main\` at [\`${BASE:0:10}\`]($COMMIT_URL/$BASE)"
+            echo
+            echo "> [!IMPORTANT]"
+            echo "> Measured on an emulator on a shared CI runner, so the numbers only show the direction of a change. Confirm them on a physical device before relying on them; see the [display benchmark README](https://github.com/$GITHUB_REPOSITORY/blob/main/packages/enriched-markdown-android/display-benchmark/README.md#running)."
+            echo
+            if [[ -n "$BEHIND" && "$BEHIND" != "0" ]]; then
+              echo "The pull request is $BEHIND commit(s) behind \`main\`, so the difference also includes what \`main\` gained since. Rebase it to measure its own changes alone."
+              echo
+            fi
+            if [[ -f results/results.md ]]; then
+              cat results/results.md
+            else
+              echo "The benchmark did not finish, so there are no results to compare."
+            fi
+            echo
+            echo "[Run]($RUN_URL)"
+          } > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md
