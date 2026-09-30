@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.text.Spannable
-import android.text.SpannableString
 import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
@@ -17,8 +16,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.EnrichedMarkdownInternalText
-import com.swmansion.enriched.markdown.renderer.BlockStyle
-import com.swmansion.enriched.markdown.renderer.SpanStyleCache
+import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+import com.swmansion.enriched.markdown.parser.MarkdownASTNode.NodeType
+import com.swmansion.enriched.markdown.renderer.Renderer
 import com.swmansion.enriched.markdown.spans.SpoilerSpan
 import com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
@@ -51,7 +51,6 @@ class DrawScopeSpoilerSegmentOverlayTest {
 
   private companion object {
     const val WIDTH = 600
-    const val FONT_SIZE = 40f
     val FILL = Color.Red
   }
 
@@ -160,18 +159,19 @@ class DrawScopeSpoilerSegmentOverlayTest {
     after: String = " more",
   ): Harness {
     val style = StyleConfig.default(context)
-    val text = SpannableString(before + secret + after)
-    val span =
-      SpoilerSpan(
-        styleCache = SpanStyleCache(style, context),
-        blockStyle = BlockStyle(fontSize = FONT_SIZE, fontFamily = "", fontWeight = "", color = AndroidColor.BLACK),
-      )
-    text.setSpan(span, before.length, before.length + secret.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+    val paragraph =
+      listOf(
+        MarkdownASTNode(NodeType.Text, content = before),
+        MarkdownASTNode(NodeType.Spoiler, children = listOf(MarkdownASTNode(NodeType.Text, content = secret))),
+        MarkdownASTNode(NodeType.Text, content = after),
+      ).filter { it.type != NodeType.Text || it.content.isNotEmpty() }
+    val document =
+      MarkdownASTNode(NodeType.Document, children = listOf(MarkdownASTNode(NodeType.Paragraph, children = paragraph)))
+    val text = Renderer().apply { configure(style, context) }.renderDocument(document)
 
     val view = EnrichedMarkdownInternalText(context)
     view.layoutParams = ViewGroup.LayoutParams(WIDTH, ViewGroup.LayoutParams.WRAP_CONTENT)
-    view.setTextSize(TypedValue.COMPLEX_UNIT_PX, FONT_SIZE)
-    view.setTextColor(AndroidColor.BLACK)
+    view.setTextSize(TypedValue.COMPLEX_UNIT_PX, style.paragraphStyle.fontSize)
     view.spoilerOverlay = overlay
     view.applyStyledText(text)
     view.measure(
@@ -209,20 +209,17 @@ class DrawScopeSpoilerSegmentOverlayTest {
     assertEquals(1f, segment.fontScale, 0f)
     assertEquals(LayoutDirection.Ltr, segment.layoutDirection)
 
-    // Filling the scope fills the segment where the view puts it, and nothing else.
-    val bounds = test.boundsOf(drawn)
-    var filled = 0
-    forEachPixelInside(bounds) { x, y ->
-      assertEquals("Pixel ($x, $y)", FILL.toArgb(), bitmap.getPixel(x, y))
-      filled++
-    }
-    assertTrue("The segment should have an inside", filled > 0)
-    for (x in 0 until bitmap.width) {
-      for (y in 0 until bitmap.height) {
-        if (bitmap.getPixel(x, y) != FILL.toArgb()) continue
-        val inside = x >= floor(bounds[0]) && x < ceil(bounds[2]) && y >= floor(bounds[1]) && y < ceil(bounds[3])
-        assertTrue("Fill outside the segment at ($x, $y)", inside)
-      }
+    // Filling the scope fills the segment where the view puts it, and stops at its edges: a few
+    // pixels in from each edge are filled, and a few pixels out are not.
+    val (left, top, right, bottom) = test.boundsOf(drawn).map { it.toInt() }
+    val midX = (left + right) / 2
+    val midY = (top + bottom) / 2
+    val inside = listOf(left + 2 to midY, right - 2 to midY, midX to top + 2, midX to bottom - 2, midX to midY)
+    val outside = listOf(left - 2 to midY, right + 2 to midY, midX to top - 2, midX to bottom + 2)
+    for ((x, y) in inside) assertEquals("Pixel ($x, $y)", FILL.toArgb(), bitmap.getPixel(x, y))
+    for ((x, y) in outside) {
+      if (x !in 0 until bitmap.width || y !in 0 until bitmap.height) continue
+      assertTrue("Fill outside the segment at ($x, $y)", bitmap.getPixel(x, y) != FILL.toArgb())
     }
   }
 
