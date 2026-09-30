@@ -56,6 +56,15 @@ internal class SpoilerOverlayDrawer(
 
   override val density: Float = textView.resources.displayMetrics.density
 
+  // Read on each use: the user can change it while the view lives.
+  override val fontScale: Float
+    get() =
+      textViewReference
+        .get()
+        ?.resources
+        ?.configuration
+        ?.fontScale ?: 1f
+
   var spoilerOverlay: SpoilerOverlay = SpoilerOverlay.Particles()
     set(value) {
       if (field == value) return

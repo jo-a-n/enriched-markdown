@@ -65,6 +65,9 @@ interface SpoilerOverlayHost {
   /** Pixels per dp on the view's display. */
   val density: Float
 
+  /** The user's font scale: pixels per sp are [density] times this. */
+  val fontScale: Float
+
   /**
    * Asks for one more draw, for example after an asset the overlay needs has loaded. Safe to call
    * from any thread. An overlay that animates sets [SpoilerSegmentOverlay.isAnimated] instead.

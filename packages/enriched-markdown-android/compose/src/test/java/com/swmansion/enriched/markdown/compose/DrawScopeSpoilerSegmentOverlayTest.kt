@@ -31,6 +31,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowSystemClock
@@ -81,6 +82,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
     var segment: SpoilerSegment? = null
     var size: Size? = null
     var density = 0f
+    var fontScale = 0f
     var layoutDirection: LayoutDirection? = null
     val revealProgress = mutableListOf<Float>()
     val revealSizes = mutableListOf<Size>()
@@ -89,10 +91,11 @@ class DrawScopeSpoilerSegmentOverlayTest {
       this@ProbeSegment.segment = segment
       this@ProbeSegment.size = size
       this@ProbeSegment.density = density
+      this@ProbeSegment.fontScale = fontScale
       this@ProbeSegment.layoutDirection = layoutDirection
       when (drawing) {
         Drawing.FILL -> drawRect(FILL)
-        Drawing.TEXT -> drawText(segment)
+        Drawing.TEXT -> drawSegmentText(segment)
         Drawing.NOTHING -> Unit
       }
     }
@@ -203,6 +206,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
     assertEquals(Size(drawn.width, drawn.height), segment.size)
     assertEquals(2f, segment.density, 0f)
     assertEquals(test.view.resources.displayMetrics.density, segment.density, 0f)
+    assertEquals(1f, segment.fontScale, 0f)
     assertEquals(LayoutDirection.Ltr, segment.layoutDirection)
 
     // Filling the scope fills the segment where the view puts it, and nothing else.
@@ -220,6 +224,23 @@ class DrawScopeSpoilerSegmentOverlayTest {
         assertTrue("Fill outside the segment at ($x, $y)", inside)
       }
     }
+  }
+
+  @Test
+  fun theScopeFollowsTheUsersFontScale() {
+    RuntimeEnvironment.setFontScale(1.5f)
+    val probe = Probe()
+    val test = harness(ProbeOverlay(probe))
+
+    test.draw()
+    val segment = probe.created.single()
+    assertEquals(1.5f, segment.fontScale, 0f)
+
+    // A change while the segment lives reaches its next draw.
+    RuntimeEnvironment.setFontScale(2f)
+    test.draw()
+    assertTrue("The segment should outlive the change", probe.created.single() === segment)
+    assertEquals(2f, segment.fontScale, 0f)
   }
 
   @Test
@@ -288,7 +309,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
   // MARK: Drawing the text through
 
   @Test
-  fun drawTextShowsTheConcealedGlyphs() {
+  fun drawSegmentTextShowsTheConcealedGlyphs() {
     val bareProbe = Probe()
     val bare = harness(ProbeOverlay(bareProbe, Drawing.NOTHING))
     val textProbe = Probe()
@@ -309,7 +330,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
       return inked
     }
     assertEquals("A concealed spoiler draws no glyphs of its own", 0, inkIn(bare, bareBitmap, bareProbe))
-    assertTrue("drawText should put the glyphs in the segment", inkIn(throughOverlay, textBitmap, textProbe) > 0)
+    assertTrue("drawSegmentText should put the glyphs in the segment", inkIn(throughOverlay, textBitmap, textProbe) > 0)
     assertFalse("Drawing them leaves the spoiler concealed", throughOverlay.span.revealed || throughOverlay.span.revealing)
   }
 

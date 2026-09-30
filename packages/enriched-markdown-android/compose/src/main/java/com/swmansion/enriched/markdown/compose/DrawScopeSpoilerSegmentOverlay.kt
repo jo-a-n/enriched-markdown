@@ -19,16 +19,16 @@ import androidx.compose.ui.graphics.Canvas as ComposeCanvas
  *
  * Every call gets a [DrawScope] over the segment: its origin is the segment's top-left corner, its
  * [DrawScope.size] the segment's size, and drawing is clipped to it. Its [Density] is the host's
- * display density at a font scale of 1, and its [LayoutDirection] follows the direction of the
- * segment's paragraph ([SpoilerSegment.isRtl]).
+ * display density and font scale, and its [LayoutDirection] follows the direction of the segment's
+ * paragraph ([SpoilerSegment.isRtl]).
  *
  * [isAnimated] and [onRemoved] work as they do on any [SpoilerSegmentOverlay]. To draw the text
- * through the overlay (a blur, a pixelation), use [drawText].
+ * through the overlay (a blur, a pixelation), use [drawSegmentText].
  */
 abstract class DrawScopeSpoilerSegmentOverlay(
-  host: SpoilerOverlayHost,
+  private val host: SpoilerOverlayHost,
 ) : SpoilerSegmentOverlay() {
-  private val density = Density(host.density)
+  private var density = Density(host.density, host.fontScale)
   private val drawScope = CanvasDrawScope()
 
   // The view hands over the same canvas frame after frame, so its wrapper is kept until it changes.
@@ -68,7 +68,7 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     canvas: NativeCanvas,
     segment: SpoilerSegment,
   ) {
-    drawScope.draw(density, segment.layoutDirection, wrap(canvas), Size(segment.width, segment.height)) {
+    drawScope.draw(currentDensity(), segment.layoutDirection, wrap(canvas), Size(segment.width, segment.height)) {
       draw(segment)
     }
   }
@@ -78,9 +78,16 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     segment: SpoilerSegment,
     progress: Float,
   ) {
-    drawScope.draw(density, segment.layoutDirection, wrap(canvas), Size(segment.width, segment.height)) {
+    drawScope.draw(currentDensity(), segment.layoutDirection, wrap(canvas), Size(segment.width, segment.height)) {
       drawReveal(segment, progress)
     }
+  }
+
+  // The font scale can change while the segment lives; the Density is only remade when it does.
+  private fun currentDensity(): Density {
+    val fontScale = host.fontScale
+    if (density.fontScale != fontScale) density = Density(host.density, fontScale)
+    return density
   }
 
   private fun wrap(canvas: NativeCanvas): ComposeCanvas {
@@ -99,6 +106,6 @@ abstract class DrawScopeSpoilerSegmentOverlay(
  * [SpoilerSegment.drawText]. The scope's current transform applies, so draw it inside `scale` or
  * `translate` to move it.
  */
-fun DrawScope.drawText(segment: SpoilerSegment) {
+fun DrawScope.drawSegmentText(segment: SpoilerSegment) {
   segment.drawText(drawContext.canvas.nativeCanvas)
 }

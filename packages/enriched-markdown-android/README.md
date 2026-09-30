@@ -287,6 +287,7 @@ class SpoilerSegment {
 
 interface SpoilerOverlayHost {
   val density: Float    // pixels per dp
+  val fontScale: Float  // the user's font scale; pixels per sp are density × fontScale
   fun invalidate()      // one more draw, e.g. after an asset loads
 }
 ```
@@ -364,11 +365,11 @@ abstract class DrawScopeSpoilerSegmentOverlay(host: SpoilerOverlayHost) : Spoile
   protected fun DrawScope.drawFadingOut(segment: SpoilerSegment, progress: Float)
 }
 
-fun DrawScope.drawText(segment: SpoilerSegment)  // segment.drawText(), through the scope
+fun DrawScope.drawSegmentText(segment: SpoilerSegment)  // segment.drawText(), through the scope
 ```
 
 The scope's `size` is the segment's, its origin is the segment's top-left corner, its density is the
-display's, and its `layoutDirection` follows the segment's paragraph (`segment.isRtl`). `isAnimated`,
+display's (with the user's font scale), and its `layoutDirection` follows the segment's paragraph (`segment.isRtl`). `isAnimated`,
 `onRemoved`, reveals and everything else work as above. This one sweeps a band of light across a
 rounded box, and wipes the box away in reading order when revealed:
 
@@ -413,7 +414,7 @@ EnrichedMarkdownText(markdown = content, spoilerOverlay = ShimmerSpoiler())
 ```
 
 To keep the fade and add to it, call `drawFadingOut(segment, progress)` from `drawReveal`. To show
-the text through, `drawText(segment)` draws the glyphs into the scope, under its current transform.
+the text through, `drawSegmentText(segment)` draws the glyphs into the scope, under its current transform.
 
 `createSegment` runs outside composition, so an overlay that needs a value from the composition,
 such as a theme color, takes it as a property, the way `ShimmerSpoiler` takes `periodMillis`, and is
