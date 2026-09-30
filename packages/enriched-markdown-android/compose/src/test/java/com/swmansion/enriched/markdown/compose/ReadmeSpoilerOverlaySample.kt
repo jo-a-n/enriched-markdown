@@ -15,8 +15,8 @@ import com.swmansion.enriched.markdown.spoiler.SpoilerOverlayHost
 import com.swmansion.enriched.markdown.spoiler.SpoilerSegment
 import com.swmansion.enriched.markdown.styles.SpoilerStyle
 
-// The Compose custom overlay example from the README, kept here so it keeps compiling. Keep the two
-// in sync.
+// The Compose custom overlay example from the README, kept here so it keeps compiling. Keep it in
+// sync with the README and with the example app's copy in PlaygroundSpoilerOverlay.kt.
 
 data class ShimmerSpoiler(
   val periodMillis: Long = 1_500,

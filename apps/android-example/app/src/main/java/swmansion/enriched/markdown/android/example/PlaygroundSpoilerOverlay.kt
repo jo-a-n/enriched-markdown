@@ -6,13 +6,12 @@ import android.graphics.Paint
 import android.graphics.RectF
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.swmansion.enriched.markdown.compose.DrawScopeSpoilerSegmentOverlay
@@ -34,7 +33,7 @@ enum class PlaygroundSpoilerOverlay(
   Particles("Particles", SpoilerOverlay.Particles()),
   DenseParticles("Dense particles", SpoilerOverlay.Particles(density = 20f, speed = 45f)),
   Solid("Solid", SpoilerOverlay.Solid(cornerRadius = 6f)),
-  Gradient("Gradient", GradientSpoiler()),
+  Shimmer("Shimmer", ShimmerSpoiler()),
   Pixelated("Pixelated", PixelatedSpoiler()),
   ;
 
@@ -58,51 +57,51 @@ fun spoilerSampleMarkdown(inlineImageUri: String): String =
 // A custom overlay drawn with Compose (DrawScope, Brush, Color).
 
 /**
- * A rounded box with a gradient drifting through it in reading order. When revealed, it wipes
- * away line after line.
+ * The README's Compose example: a band of light sweeping across a rounded box, which wipes away in
+ * reading order when revealed. Keep it in sync with the README.
  */
-data class GradientSpoiler(
-  val periodMillis: Long = 2_000,
+data class ShimmerSpoiler(
+  val periodMillis: Long = 1_500,
 ) : CustomSpoilerOverlay {
   override fun createSegment(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
-  ) = GradientSegment(host, Color(style.color), periodMillis)
+  ) = ShimmerSegment(host, Color(style.color), periodMillis)
 }
 
-class GradientSegment(
+class ShimmerSegment(
   host: SpoilerOverlayHost,
-  color: Color,
+  private val color: Color,
   private val periodMillis: Long,
 ) : DrawScopeSpoilerSegmentOverlay(host) {
-  // Made once and slid with translate(): a new Brush each frame is a new shader.
-  private val stripe = 40 * host.density
-  private val gradient =
+  // A band of light, made once and moved with translate(): a new Brush each frame is a new shader.
+  private val band = 32 * host.density
+  private val shine =
     Brush.horizontalGradient(
-      listOf(color, lerp(color, Color.White, 0.45f)),
-      startX = 0f,
-      endX = stripe,
-      tileMode = TileMode.Mirror,
+      listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
+      startX = -band,
+      endX = band,
     )
 
   override val isAnimated get() = true
 
   override fun DrawScope.draw(segment: SpoilerSegment) {
-    // One period moves the mirrored gradient by a full repeat, so the loop is seamless.
+    drawRoundRect(color, cornerRadius = CornerRadius(4.dp.toPx()))
+    // The band sweeps across in reading order, once per period.
     val phase = (segment.frameTimeMillis % periodMillis) / periodMillis.toFloat()
-    val offset = 2 * stripe * phase * if (layoutDirection == LayoutDirection.Ltr) 1 else -1
-    translate(left = offset) {
-      drawRoundRect(gradient, topLeft = Offset(-offset, 0f), size = size, cornerRadius = CornerRadius(4.dp.toPx()))
+    val travelled = -band + (size.width + 2 * band) * phase
+    val center = if (layoutDirection == LayoutDirection.Ltr) travelled else size.width - travelled
+    translate(left = center) {
+      drawRect(shine, topLeft = Offset(-band, 0f), size = Size(2 * band, size.height))
     }
   }
 
+  // Wipes the box away in reading order, instead of the default fade.
   override fun DrawScope.drawReveal(
     segment: SpoilerSegment,
     progress: Float,
   ) {
-    // Every segment gets progress at once; give each line its own slice of it, in reading order.
-    val lineProgress = (progress * segment.count - segment.index).coerceIn(0f, 1f)
-    val covered = size.width * (1f - lineProgress)
+    val covered = size.width * (1f - progress)
     val left = if (layoutDirection == LayoutDirection.Ltr) size.width - covered else 0f
     clipRect(left = left, right = left + covered) { draw(segment) }
   }
