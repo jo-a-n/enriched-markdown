@@ -39,7 +39,6 @@ import java.time.Duration
 import kotlin.math.ceil
 import kotlin.math.floor
 
-/** Covers the seam custom overlays plug into: what they are given, and when they come and go. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
 // The native runtime lays text out for real, which segment geometry and glyph pixels need.
@@ -53,7 +52,6 @@ class SpoilerCustomOverlayTest {
     val LONG_SPOILER = List(40) { "concealed" }.joinToString(" ")
   }
 
-  /** Every segment overlay a [ProbeOverlay] created, in creation order. */
   private class Probe {
     val created = mutableListOf<ProbeSegment>()
   }
@@ -391,7 +389,6 @@ class SpoilerCustomOverlayTest {
     val before = probe.created.size
     test.drawer.revealSpan(test.span) {}
 
-    // A narrower view wraps the spoiler onto new lines.
     test.textView.measure(
       View.MeasureSpec.makeMeasureSpec(WIDTH / 2, View.MeasureSpec.EXACTLY),
       View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),

@@ -4,7 +4,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 
-/** [SpoilerOverlay.Solid]: a rounded box in the style's color. */
 internal class SolidSegmentOverlay(
   private val color: Int,
   private val cornerRadius: Float,

@@ -40,7 +40,6 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import android.graphics.Color as AndroidColor
 
-/** Covers the bridge from the view's canvas to a Compose [DrawScope]. */
 @RunWith(AndroidJUnit4::class)
 // xhdpi, so the density the scope gets is not the default of 1.
 @Config(sdk = [28], qualifiers = "xhdpi")
@@ -54,12 +53,10 @@ class DrawScopeSpoilerSegmentOverlayTest {
     val FILL = Color.Red
   }
 
-  /** What a [ProbeSegment] saw, one per segment it was created for. */
   private class Probe {
     val created = mutableListOf<ProbeSegment>()
   }
 
-  /** What a [ProbeSegment] draws while concealed. */
   private enum class Drawing { FILL, TEXT, NOTHING }
 
   private data class ProbeOverlay(
@@ -134,7 +131,6 @@ class DrawScopeSpoilerSegmentOverlayTest {
       return floatArrayOf(left, top, left + segment.width, top + segment.height)
     }
 
-    /** Taps the middle of the spoiler, as a reader would. */
     fun tapSpoiler() {
       val text = view.text as Spannable
       val layout = requireNotNull(view.layout)
@@ -209,8 +205,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
     assertEquals(1f, segment.fontScale, 0f)
     assertEquals(LayoutDirection.Ltr, segment.layoutDirection)
 
-    // Filling the scope fills the segment where the view puts it, and stops at its edges: a few
-    // pixels in from each edge are filled, and a few pixels out are not.
+    // Filled a few pixels in from each edge, and not a few pixels out.
     val (left, top, right, bottom) = test.boundsOf(drawn).map { it.toInt() }
     val midX = (left + right) / 2
     val midY = (top + bottom) / 2
@@ -249,7 +244,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
     val segment = probe.created.single()
     assertEquals(2f, segment.density, 0f)
 
-    // A change while the segment lives, like a move to another display, reaches its next draw.
+    // A change while the segment lives reaches its next draw.
     RuntimeEnvironment.setQualifiers("xxhdpi")
     test.draw()
     assertTrue("The segment should outlive the change", probe.created.single() === segment)

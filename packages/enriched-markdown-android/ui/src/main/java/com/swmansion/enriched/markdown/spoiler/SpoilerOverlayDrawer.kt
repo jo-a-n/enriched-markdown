@@ -13,11 +13,7 @@ import com.swmansion.enriched.markdown.spans.SpoilerSpan
 import com.swmansion.enriched.markdown.styles.SpoilerStyle
 import java.lang.ref.WeakReference
 
-/**
- * Keeps one [SpoilerSegmentOverlay] per line segment of every concealed spoiler in a text view,
- * draws them over the text, and runs reveals. Overlays only draw: this owns their lifecycle, the
- * reveal clock, and the text fading in underneath.
- */
+/** Draws a [SpoilerSegmentOverlay] over each line of every concealed spoiler, and runs reveals. */
 internal class SpoilerOverlayDrawer(
   textView: TextView,
 ) : SpoilerOverlayHost {
@@ -55,8 +51,7 @@ internal class SpoilerOverlayDrawer(
 
   private var style: SpoilerStyle? = null
 
-  // Both read on each use: a configuration change the view handles itself (a new display, a new
-  // display size or font size) alters them while it lives.
+  // Read on each use: a configuration change the view handles itself can alter them while it lives.
   override val density: Float
     get() =
       textViewReference
@@ -86,20 +81,17 @@ internal class SpoilerOverlayDrawer(
 
   fun registerSpans(spans: Array<SpoilerSpan>) {
     if (spans.isEmpty()) return
-    // The spans of one text come from one render and share its style cache, and the spoiler style
-    // is set per document, not per block, so any span carries the style of all of them.
+    // The spoiler style is per document, so any span of one render carries it.
     val newStyle = spans[0].styleCache.spoilerStyle
     if (style == newStyle) return
     val restyled = style != null
     style = newStyle
-    // Overlays take the style when they are created, so a new one needs new overlays.
     if (restyled) rebuild()
   }
 
   fun draw(canvas: Canvas) {
     val ctx = buildContext() ?: return
     val style = style ?: return
-    // One clock for the whole frame: the text fade, every reveal and every animated overlay.
     val now = AnimationUtils.currentAnimationTimeMillis()
     advanceReveals(now)
 
@@ -198,8 +190,7 @@ internal class SpoilerOverlayDrawer(
   ) {
     lineSegments.clear()
 
-    // The span may be set in a different size than the view (e.g. in a heading), so measure the
-    // band it covers with its block's metrics rather than the view's.
+    // Measured with the block's font size, which can differ from the view's (e.g. in a heading).
     metricsPaint.set(ctx.layout.paint)
     metricsPaint.textSize = span.blockStyle.fontSize
     metricsPaint.getFontMetrics(fontMetrics)
@@ -241,8 +232,6 @@ internal class SpoilerOverlayDrawer(
     }
   }
 
-  // The text fades in as the overlay fades out, on the same curve, and a reveal ends by removing
-  // its segments.
   private fun advanceReveals(now: Long) {
     if (reveals.isEmpty()) return
     val finished = mutableListOf<SpoilerSpan>()

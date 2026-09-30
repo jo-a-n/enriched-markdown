@@ -3,11 +3,8 @@ package com.swmansion.enriched.markdown.spoiler
 import com.swmansion.enriched.markdown.spans.SpoilerSpan
 
 /**
- * Identifies a segment across draws. A segment that keeps its line and its characters keeps its
- * overlay, even if it moves or resizes; any other change gets a new one.
- *
- * [start] and [end] are the part of [span] on [line], not the span's own range: a reflow that moves
- * a line break inside the span changes them while the span stays the same.
+ * A segment keeps its overlay while its line and characters stay the same, even if it moves or
+ * resizes. [start] and [end] are the part of [span] on [line], not the span's own range.
  */
 internal data class SegmentKey(
   val span: SpoilerSpan,

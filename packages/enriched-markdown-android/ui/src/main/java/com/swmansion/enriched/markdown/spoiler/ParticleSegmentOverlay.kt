@@ -8,12 +8,7 @@ import kotlin.math.max
 import kotlin.math.sin
 import kotlin.random.Random
 
-/**
- * [SpoilerOverlay.Particles]: a field of drifting dots, simulated in pixels. A reveal bursts the
- * field outwards as it fades.
- *
- * Uses a flat FloatArray (struct-of-arrays) to avoid GC pressure.
- */
+/** Uses a flat FloatArray (struct-of-arrays) to avoid GC pressure. */
 internal class ParticleSegmentOverlay(
   particleColor: Int,
   particleDensity: Float,
@@ -80,7 +75,6 @@ internal class ParticleSegmentOverlay(
     }
   }
 
-  // Scatters the field: spawning stops, and the dots speed up and fade faster.
   private fun burst() {
     isBursting = true
     for (index in 0 until particleCount) {
@@ -91,7 +85,6 @@ internal class ParticleSegmentOverlay(
     }
   }
 
-  // Steps the simulation once per frame; a second draw in the same frame leaves it as it is.
   private fun advanceTo(frameTimeMillis: Long) {
     if (frameTimeMillis == lastFrameTime) return
     val deltaTime =

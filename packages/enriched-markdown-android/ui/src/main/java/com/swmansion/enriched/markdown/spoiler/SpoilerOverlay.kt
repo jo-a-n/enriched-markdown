@@ -4,18 +4,14 @@ import com.swmansion.enriched.markdown.styles.SpoilerStyle
 
 /**
  * How unrevealed `||spoiler||` text is concealed: one of the built-ins, or a [CustomSpoilerOverlay].
- *
- * Colors come from the theme's [SpoilerStyle]; the tuning of each effect is the overlay's own. A
- * view rebuilds its overlays only when the new value is not `==` to the previous one.
+ * Colors come from the theme's [SpoilerStyle].
  */
 sealed interface SpoilerOverlay {
   /**
    * A field of drifting particles, the default.
    *
-   * @property density how thickly the field is populated; the particle count scales linearly
-   *   with it, so 16 is twice the default.
-   * @property speed how fast the particles drift; their velocity scales linearly with it, so 40 is
-   *   twice the default.
+   * @property density how thickly the field is populated; the particle count scales linearly.
+   * @property speed how fast the particles drift; their velocity scales linearly.
    */
   data class Particles(
     val density: Float = DEFAULT_DENSITY,
@@ -91,9 +87,6 @@ internal fun SpoilerOverlay.createSegmentOverlay(
 ): SpoilerSegmentOverlay =
   when (this) {
     is SpoilerOverlay.Particles -> ParticleSegmentOverlay(style.color, density, speed)
-
-    // Given in dp like the rest of the overlay's public tuning; drawn in pixels.
     is SpoilerOverlay.Solid -> SolidSegmentOverlay(style.color, cornerRadius * host.density)
-
     is CustomSpoilerOverlay -> createSegment(host, style)
   }

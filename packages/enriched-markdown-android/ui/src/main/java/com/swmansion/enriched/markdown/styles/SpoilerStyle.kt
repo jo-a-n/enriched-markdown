@@ -1,11 +1,8 @@
 package com.swmansion.enriched.markdown.styles
 
 /**
- * Colors of the overlay that conceals `||spoiler||` text. How the overlay looks otherwise is set by
- * the [com.swmansion.enriched.markdown.spoiler.SpoilerOverlay] itself.
- *
- * The default here is a placeholder for constructing a bare [StyleConfig]; the theme default comes
- * from `DefaultStyles`.
+ * Colors of the spoiler overlay; the effect itself is set by
+ * [com.swmansion.enriched.markdown.spoiler.SpoilerOverlay].
  *
  * @property color the particles' color, and the solid overlay's fill.
  */

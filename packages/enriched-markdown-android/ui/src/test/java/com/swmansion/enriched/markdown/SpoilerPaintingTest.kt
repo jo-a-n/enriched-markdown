@@ -47,11 +47,8 @@ import java.time.Duration
 /**
  * Covers the geometry the overlay paints and the state machine a reveal walks through.
  *
- * Scope note: the frame loop runs on [android.view.Choreographer], which Robolectric only advances
- * through a paused looper, and the particle field is random by design. Frames are therefore drawn
- * by hand here, with [ShadowSystemClock] as the clock, and what is asserted is the static draw (one
- * rect per line of the span, in the styled color) and the transitions a span makes as it is
- * revealed.
+ * Frames are drawn by hand with [ShadowSystemClock] as the clock, since Robolectric only advances
+ * [android.view.Choreographer] through a paused looper.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
@@ -66,10 +63,7 @@ class SpoilerPaintingTest {
     const val OVERLAY = 0xFF884422.toInt()
   }
 
-  /**
-   * A [Canvas] that remembers the shapes drawn onto it, in view coordinates, with the color each
-   * was painted in.
-   */
+  /** Records the shapes drawn onto it, in view coordinates, with their colors. */
   private class RecordingCanvas(
     val bitmap: Bitmap,
   ) : Canvas(bitmap) {

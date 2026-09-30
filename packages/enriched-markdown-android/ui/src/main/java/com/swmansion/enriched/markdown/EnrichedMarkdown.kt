@@ -160,11 +160,7 @@ class EnrichedMarkdown(
     }
   }
 
-  /**
-   * Chooses the overlay that conceals unrevealed spoilers: drifting particles (the default), a
-   * solid rounded block, or a [com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay].
-   * Setting a value `==` to the current one keeps the overlays as they are.
-   */
+  /** Chooses the overlay that conceals unrevealed spoilers. */
   fun setSpoilerOverlay(overlay: SpoilerOverlay) {
     if (spoilerOverlay == overlay) return
     spoilerOverlay = overlay

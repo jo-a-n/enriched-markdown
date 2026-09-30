@@ -2,13 +2,7 @@ package com.swmansion.enriched.markdown.spoiler
 
 import android.view.Choreographer
 
-/**
- * The frame loop behind animated overlays and reveals. It is paced by drawing: each draw that
- * still has something moving asks for the next frame, so the loop stops by itself once nothing
- * moves, or when the view stops being drawn.
- *
- * [onFrame] runs in the frame's animation phase, before the view draws.
- */
+/** The frame loop for animations: each draw that still animates requests the next frame. */
 internal class SpoilerAnimator(
   private val onFrame: () -> Unit,
 ) {

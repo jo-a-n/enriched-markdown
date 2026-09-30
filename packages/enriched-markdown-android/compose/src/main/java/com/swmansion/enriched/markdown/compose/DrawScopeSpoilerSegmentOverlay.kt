@@ -14,16 +14,9 @@ import android.graphics.Canvas as NativeCanvas
 import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 
 /**
- * A [SpoilerSegmentOverlay] drawn with Compose: subclass it, implement [DrawScope.draw], and return
- * instances from [CustomSpoilerOverlay.createSegment], passing on the host.
- *
- * Every call gets a [DrawScope] over the segment: its origin is the segment's top-left corner, its
- * [DrawScope.size] the segment's size, and drawing is clipped to it. Its [Density] is the host's
- * display density and font scale, and its [LayoutDirection] follows the direction of the segment's
- * paragraph ([SpoilerSegment.isRtl]).
- *
- * [isAnimated] and [onRemoved] work as they do on any [SpoilerSegmentOverlay]. To draw the text
- * through the overlay (a blur, a pixelation), use [drawSegmentText].
+ * A [SpoilerSegmentOverlay] drawn with Compose; return instances from
+ * [CustomSpoilerOverlay.createSegment]. Each call gets a [DrawScope] clipped to the segment, with
+ * the host's [Density] and a [LayoutDirection] that follows [SpoilerSegment.isRtl].
  */
 abstract class DrawScopeSpoilerSegmentOverlay(
   private val host: SpoilerOverlayHost,
@@ -31,20 +24,13 @@ abstract class DrawScopeSpoilerSegmentOverlay(
   private var density = Density(host.density, host.fontScale)
   private val drawScope = CanvasDrawScope()
 
-  // The view hands over the same canvas frame after frame, so its wrapper is kept until it changes.
   private var nativeCanvas: NativeCanvas? = null
   private var composeCanvas: ComposeCanvas? = null
 
   /** Draws the concealed segment. [segment] describes it as of this frame. */
   abstract fun DrawScope.draw(segment: SpoilerSegment)
 
-  /**
-   * Draws the segment as it is revealed, with [progress] rising from 0 towards 1; see
-   * [SpoilerSegmentOverlay.drawReveal] for how reveals run.
-   *
-   * The default is [drawFadingOut]. Override it for an effect of your own, and call
-   * [drawFadingOut] from the override to keep the fade.
-   */
+  /** See [SpoilerSegmentOverlay.drawReveal]. The default is [drawFadingOut]. */
   open fun DrawScope.drawReveal(
     segment: SpoilerSegment,
     progress: Float,
@@ -52,10 +38,7 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     drawFadingOut(segment, progress)
   }
 
-  /**
-   * Draws [DrawScope.draw] faded out to how far the reveal at [progress] has got, on the curve the
-   * text fades in on underneath.
-   */
+  /** Draws [DrawScope.draw] faded out by [progress], as the text fades in underneath. */
   protected fun DrawScope.drawFadingOut(
     segment: SpoilerSegment,
     progress: Float,
@@ -83,8 +66,6 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     }
   }
 
-  // The host's density and font scale can change while the segment lives; the Density is only
-  // remade when one of them does.
   private fun currentDensity(): Density {
     val hostDensity = host.density
     val fontScale = host.fontScale
@@ -103,11 +84,7 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     get() = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 }
 
-/**
- * Draws [segment]'s text as it looks once revealed, each glyph where the text view draws it; see
- * [SpoilerSegment.drawText]. The scope's current transform applies, so draw it inside `scale` or
- * `translate` to move it.
- */
+/** See [SpoilerSegment.drawText]. The scope's current transform applies. */
 fun DrawScope.drawSegmentText(segment: SpoilerSegment) {
   segment.drawText(drawContext.canvas.nativeCanvas)
 }

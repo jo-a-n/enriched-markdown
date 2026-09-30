@@ -35,10 +35,7 @@ class SpoilerSegment internal constructor(
   var baseline: Float = 0f
     internal set
 
-  /**
-   * Whether the paragraph the segment is in runs right to left, for effects with a direction (a
-   * wipe, a sweep) to follow the reading order. Segments are still numbered in reading order.
-   */
+  /** Whether the segment's paragraph runs right to left, for effects with a direction to follow. */
   var isRtl: Boolean = false
     internal set
 
@@ -71,17 +68,12 @@ class SpoilerSegment internal constructor(
 
   /**
    * Draws the segment's text as it looks once revealed, each glyph where the text view draws it,
-   * so an effect that shows the text through (a blur, pixelation, a scramble) lines up with the
-   * real text as the overlay fades. Draw into the canvas an overlay is given, or into a bitmap the
-   * segment's size to process it first. Text around the segment is clipped away.
-   *
-   * It lays out the whole line each time, so an overlay that draws it every frame should cache the
-   * result until [width] or [height] changes.
+   * for effects that show the text through (a blur, pixelation). It lays out the whole line each
+   * time, so cache the result until [width] or [height] changes.
    */
   fun drawText(canvas: Canvas) {
     val layout = layout ?: return
-    // Concealment is the spoiler spans' paint alpha, so lifting it for this one call shows the text
-    // without touching what the view draws.
+    // Concealment is the spans' paint alpha; lift it for this one call.
     val spoilers = source.getSpans(start, end, SpoilerSpan::class.java)
     val savedAlphas = FloatArray(spoilers.size) { spoilers[it].textAlpha }
     spoilers.forEach { it.textAlpha = 1f }
