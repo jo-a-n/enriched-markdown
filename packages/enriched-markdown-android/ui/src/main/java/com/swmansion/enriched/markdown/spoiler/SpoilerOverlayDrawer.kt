@@ -78,6 +78,8 @@ internal class SpoilerOverlayDrawer(
 
   fun registerSpans(spans: Array<SpoilerSpan>) {
     if (spans.isEmpty()) return
+    // The spans of one text come from one render and share its style cache, and the spoiler style
+    // is set per document, not per block, so any span carries the style of all of them.
     val newStyle = spans[0].styleCache.spoilerStyle
     if (style == newStyle) return
     val restyled = style != null

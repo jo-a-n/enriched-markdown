@@ -107,7 +107,8 @@ class SpoilerPaintingTest {
       super.drawRect(left, top, right, bottom, paint)
     }
 
-    // Overlays draw in their segment's coordinates, under a translation.
+    // Overlays draw in their segment's coordinates, under a translation. getMatrix is deprecated
+    // because a hardware canvas's matrix is implementation-defined; over a bitmap it is exact.
     @Suppress("DEPRECATION")
     private fun inViewCoordinates(rect: RectF): RectF {
       getMatrix(currentMatrix)
