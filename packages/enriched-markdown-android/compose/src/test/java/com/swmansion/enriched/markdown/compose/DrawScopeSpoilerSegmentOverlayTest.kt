@@ -241,6 +241,22 @@ class DrawScopeSpoilerSegmentOverlayTest {
   }
 
   @Test
+  fun theScopeFollowsTheDisplaysDensity() {
+    val probe = Probe()
+    val test = harness(ProbeOverlay(probe))
+
+    test.draw()
+    val segment = probe.created.single()
+    assertEquals(2f, segment.density, 0f)
+
+    // A change while the segment lives, like a move to another display, reaches its next draw.
+    RuntimeEnvironment.setQualifiers("xxhdpi")
+    test.draw()
+    assertTrue("The segment should outlive the change", probe.created.single() === segment)
+    assertEquals(3f, segment.density, 0f)
+  }
+
+  @Test
   fun anRtlParagraphGetsAnRtlScope() {
     val probe = Probe()
     val test = harness(ProbeOverlay(probe), before = "שלום ", secret = "סוד", after = "")

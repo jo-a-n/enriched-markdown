@@ -55,9 +55,16 @@ internal class SpoilerOverlayDrawer(
 
   private var style: SpoilerStyle? = null
 
-  override val density: Float = textView.resources.displayMetrics.density
+  // Both read on each use: a configuration change the view handles itself (a new display, a new
+  // display size or font size) alters them while it lives.
+  override val density: Float
+    get() =
+      textViewReference
+        .get()
+        ?.resources
+        ?.displayMetrics
+        ?.density ?: 1f
 
-  // Read on each use: the user can change it while the view lives.
   override val fontScale: Float
     get() =
       textViewReference

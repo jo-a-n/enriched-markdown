@@ -83,10 +83,12 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     }
   }
 
-  // The font scale can change while the segment lives; the Density is only remade when it does.
+  // The host's density and font scale can change while the segment lives; the Density is only
+  // remade when one of them does.
   private fun currentDensity(): Density {
+    val hostDensity = host.density
     val fontScale = host.fontScale
-    if (density.fontScale != fontScale) density = Density(host.density, fontScale)
+    if (density.density != hostDensity || density.fontScale != fontScale) density = Density(hostDensity, fontScale)
     return density
   }
 
