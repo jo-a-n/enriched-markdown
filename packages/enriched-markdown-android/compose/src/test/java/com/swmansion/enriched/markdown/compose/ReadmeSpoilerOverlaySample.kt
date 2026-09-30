@@ -1,10 +1,13 @@
 package com.swmansion.enriched.markdown.compose
 
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay
@@ -29,22 +32,26 @@ class ShimmerSegment(
   private val color: Color,
   private val periodMillis: Long,
 ) : DrawScopeSpoilerSegmentOverlay(host) {
+  // A band of light, made once and moved with translate(): a new Brush each frame is a new shader.
+  private val band = 32 * host.density
+  private val shine =
+    Brush.horizontalGradient(
+      listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
+      startX = -band,
+      endX = band,
+    )
+
   override val isAnimated get() = true
 
   override fun DrawScope.draw(segment: SpoilerSegment) {
     drawRoundRect(color, cornerRadius = CornerRadius(4.dp.toPx()))
-    // A band of light sweeping across in reading order, once per period.
+    // The band sweeps across in reading order, once per period.
     val phase = (segment.frameTimeMillis % periodMillis) / periodMillis.toFloat()
-    val band = 32.dp.toPx()
     val travelled = -band + (size.width + 2 * band) * phase
     val center = if (layoutDirection == LayoutDirection.Ltr) travelled else size.width - travelled
-    drawRect(
-      Brush.horizontalGradient(
-        listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
-        startX = center - band,
-        endX = center + band,
-      ),
-    )
+    translate(left = center) {
+      drawRect(shine, topLeft = Offset(-band, 0f), size = Size(2 * band, size.height))
+    }
   }
 
   // Wipes the box away in reading order, instead of the default fade.

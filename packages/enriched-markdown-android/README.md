@@ -338,7 +338,9 @@ top-left corner and clipped to its size. The view rebuilds its overlays only whe
 `remember` them: a plain class created in every recomposition restarts every overlay each time.
 
 **Animation.** An overlay that moves on its own returns `true` from `isAnimated`, and the view then
-draws every frame while it is on screen. Advance the effect from `segment.frameTimeMillis`.
+draws every frame while it is on screen. Advance the effect from `segment.frameTimeMillis`. `draw`
+then runs every frame for every segment on screen, so make paints, paths, shaders and brushes once,
+in the overlay's fields, and move or restyle them per frame instead of creating new ones.
 
 **Reveals.** The view runs the reveal, 450 ms for every overlay, and calls `drawReveal` each frame
 with `progress` rising from 0 towards 1, fading the text in underneath on the same clock. The
@@ -384,22 +386,26 @@ class ShimmerSegment(
   private val color: Color,
   private val periodMillis: Long,
 ) : DrawScopeSpoilerSegmentOverlay(host) {
+  // A band of light, made once and moved with translate(): a new Brush each frame is a new shader.
+  private val band = 32 * host.density
+  private val shine =
+    Brush.horizontalGradient(
+      listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
+      startX = -band,
+      endX = band,
+    )
+
   override val isAnimated get() = true
 
   override fun DrawScope.draw(segment: SpoilerSegment) {
     drawRoundRect(color, cornerRadius = CornerRadius(4.dp.toPx()))
-    // A band of light sweeping across in reading order, once per period.
+    // The band sweeps across in reading order, once per period.
     val phase = (segment.frameTimeMillis % periodMillis) / periodMillis.toFloat()
-    val band = 32.dp.toPx()
     val travelled = -band + (size.width + 2 * band) * phase
     val center = if (layoutDirection == LayoutDirection.Ltr) travelled else size.width - travelled
-    drawRect(
-      Brush.horizontalGradient(
-        listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
-        startX = center - band,
-        endX = center + band,
-      ),
-    )
+    translate(left = center) {
+      drawRect(shine, topLeft = Offset(-band, 0f), size = Size(2 * band, size.height))
+    }
   }
 
   // Wipes the box away in reading order, instead of the default fade.
