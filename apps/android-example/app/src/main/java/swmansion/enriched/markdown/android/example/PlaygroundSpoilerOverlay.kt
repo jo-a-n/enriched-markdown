@@ -5,11 +5,13 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -73,19 +75,25 @@ class GradientSegment(
   color: Color,
   private val periodMillis: Long,
 ) : DrawScopeSpoilerSegmentOverlay(host) {
-  private val colors = listOf(color, lerp(color, Color.White, 0.45f))
+  // Made once and slid with translate(): a new Brush each frame is a new shader.
+  private val stripe = 40 * host.density
+  private val gradient =
+    Brush.horizontalGradient(
+      listOf(color, lerp(color, Color.White, 0.45f)),
+      startX = 0f,
+      endX = stripe,
+      tileMode = TileMode.Mirror,
+    )
 
   override val isAnimated get() = true
 
   override fun DrawScope.draw(segment: SpoilerSegment) {
     // One period moves the mirrored gradient by a full repeat, so the loop is seamless.
-    val stripe = 40.dp.toPx()
     val phase = (segment.frameTimeMillis % periodMillis) / periodMillis.toFloat()
     val offset = 2 * stripe * phase * if (layoutDirection == LayoutDirection.Ltr) 1 else -1
-    drawRoundRect(
-      Brush.horizontalGradient(colors, startX = offset, endX = offset + stripe, tileMode = TileMode.Mirror),
-      cornerRadius = CornerRadius(4.dp.toPx()),
-    )
+    translate(left = offset) {
+      drawRoundRect(gradient, topLeft = Offset(-offset, 0f), size = size, cornerRadius = CornerRadius(4.dp.toPx()))
+    }
   }
 
   override fun DrawScope.drawReveal(
