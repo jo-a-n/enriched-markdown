@@ -162,7 +162,9 @@ jobs:
 
       # ATD images run fewer background services, so there is less noise. The
       # screen stays unlocked; the benchmark library refuses a locked one. The
-      # build runs without the token that writes caches and artifacts.
+      # build runs without the Actions runtime token, so its tooling cannot
+      # save caches to main by accident. Code that wants the token can still
+      # read it from the runner, so reviewing what runs here is the safeguard.
       - name: Compare the pull request against main
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
