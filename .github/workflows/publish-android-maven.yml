@@ -25,10 +25,14 @@ jobs:
       - name: Check out
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
+      # Holds the signing and Maven Central secrets, so it builds without the
+      # Gradle cache: a cache entry can be written by any run on main, including
+      # android-benchmarks, which builds pull request code.
       - name: Setup Android
         uses: ./.github/actions/setup-android
         with:
           gradle-wrapper-properties: packages/enriched-markdown-android/gradle/wrapper/gradle-wrapper.properties
+          cache: none
 
       - name: Publish to Maven Local (dry run)
         if: ${{ inputs.dry-run }}

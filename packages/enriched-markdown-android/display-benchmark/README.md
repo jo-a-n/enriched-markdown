@@ -181,7 +181,10 @@ deadline and fails the test.
 `tools/compare.mjs` runs the benchmark on this checkout and on another ref, back to back on
 one device, and prints both medians with the head/base ratio. The other ref is built in a
 throwaway worktree, and each side runs its own copy of the benchmark, so a change to the
-benchmark itself makes the two sides incomparable.
+benchmark itself makes the two sides incomparable. Each document is measured on its own,
+both sides back to back, and which side goes first alternates between documents, so the
+device drifting over the session does not read as a difference between the two. A result
+missing on one side is marked in the table rather than left out.
 
 ```sh
 yarn workspace @enriched-markdown/android bench:android-native --base main
@@ -202,3 +205,8 @@ Comment `/benchmark android` on a pull request (write access required), or start
 workflow from the Actions tab with the pull request number. It measures the pull request
 head against the tip of `main` and comments the table, with both commits, on the pull
 request. Those numbers only show the direction of a change; confirm it on a physical device.
+
+The run builds the pull request's code, so a pull request from a fork is measured only at a
+commit you name after reviewing it: `/benchmark android <full head SHA>`. If the head has
+moved on since, the run stops and says so. A newer request on the same pull request
+replaces one still running.

@@ -5,9 +5,16 @@
 // same device, back to back, is what to read. Each time is the median the
 // benchmark library reports.
 //
+// With a base, each document is measured on its own, head and base back to
+// back, and which side goes first alternates from one document to the next.
+// The device drifts over a session (background work after boot, cache and JIT
+// state, heat), and measuring one whole side before the other would show that
+// drift as a difference between the two.
+//
 //   node display-benchmark/tools/compare.mjs                   # this checkout only
 //   node display-benchmark/tools/compare.mjs --base main       # this checkout vs main
 //   node display-benchmark/tools/compare.mjs --head <sha> --base main   # two commits
+//   node display-benchmark/tools/compare.mjs --report <dir>    # report on a saved --output
 //
 // Options:
 //   --base <ref>          git ref to compare against (built in a worktree under the temp dir)
@@ -16,6 +23,9 @@
 //   --documents <list>    comma-separated subset of the fixtures, e.g. complex_large
 //   --markdown <file>     also append the report to <file> as Markdown (e.g. $GITHUB_STEP_SUMMARY)
 //   --output <dir>        copy each side's results JSON and screenshots into <dir>/<side>
+//   --report <dir>        measure nothing; report on the results JSON a run saved with --output.
+//                         The JSON is read as data alone, so a report can be made from results
+//                         that untrusted code produced.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -57,6 +67,7 @@ const documentOrder = [
   'complex_large',
 ];
 const benchmarkOrder = ['full', 'render', 'layout', 'draw'];
+const resultsSuffix = '-benchmarkData.json';
 
 // Ratios inside this band are noise, not a change.
 const noiseBand = { faster: 0.8, slower: 1.25 };
@@ -66,7 +77,12 @@ if (
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    main(parseArgs(process.argv.slice(2)));
+    const options = parseArgs(process.argv.slice(2));
+    if (options.report) {
+      reportSaved(options);
+    } else {
+      main(options);
+    }
   } catch (error) {
     console.error(`\n${error.message}`);
     process.exitCode = 2;
@@ -91,18 +107,77 @@ function main(options) {
     for (const side of sides) {
       gradle(side, 'assembleReleaseAndroidTest', device);
     }
-    const [head, base] = sides.map((side) => measure(side, device, options));
-
-    const { text, markdown } = report(head, base);
-    console.log(`\n${text}`);
-    if (options.markdown) {
-      mkdirSync(path.dirname(options.markdown), { recursive: true });
-      appendFileSync(options.markdown, `${markdown}\n`);
+    for (const side of sides) side.results = new Map();
+    if (sides.length === 1) {
+      merge(sides[0].results, measure(sides[0], device, options));
+    } else {
+      documentList(options).forEach((document, index) => {
+        const order = index % 2 === 0 ? sides : [...sides].reverse();
+        for (const side of order) {
+          merge(side.results, measure(side, device, options, document));
+        }
+      });
     }
+
+    const [head, base] = sides.map((side) => side.results);
+    write(report(head, base), options);
   } finally {
     for (const side of sides) {
       if (side.worktree) removeWorktree(side.worktree);
     }
+  }
+}
+
+// Reports on the results a run saved with --output, without a device.
+function reportSaved(options) {
+  const read = (label) => {
+    const dir = path.join(options.report, label);
+    if (!existsSync(dir)) return null;
+    const results = new Map();
+    for (const entry of readdirSync(dir).sort()) {
+      if (!entry.endsWith(resultsSuffix)) continue;
+      merge(
+        results,
+        parseResults(JSON.parse(readFileSync(path.join(dir, entry), 'utf8')))
+      );
+    }
+    if (results.size === 0) {
+      throw new Error(`${label}: no benchmark results under ${dir}`);
+    }
+    return results;
+  };
+  const head = read('head');
+  if (!head) throw new Error(`no head results under ${options.report}`);
+  write(report(head, read('base')), options);
+}
+
+function write({ text, markdown }, options) {
+  console.log(`\n${text}`);
+  if (options.markdown) {
+    mkdirSync(path.dirname(options.markdown), { recursive: true });
+    appendFileSync(options.markdown, `${markdown}\n`);
+  }
+}
+
+// Documents to measure one by one: the requested ones, or every fixture.
+function documentList(options) {
+  if (!options.documents) return documentOrder;
+  const documents = options.documents
+    .split(',')
+    .map((document) => document.trim())
+    .filter(Boolean);
+  if (documents.length === 0) throw new Error('--documents lists no document');
+  return documents;
+}
+
+function merge(into, results) {
+  for (const [key, measurement] of results) {
+    if (into.has(key)) {
+      throw new Error(
+        `${measurement.benchmark}[${measurement.document}] measured twice`
+      );
+    }
+    into.set(key, measurement);
   }
 }
 
@@ -174,7 +249,9 @@ function removeWorktree(worktree) {
   git(['worktree', 'remove', '--force', worktree]);
 }
 
-function measure(side, device, options) {
+// Runs the benchmark once on one side: every requested document, or just
+// `document` when given.
+function measure(side, device, options, document) {
   const outputDir = path.join(side.dir, outputRelative);
   // Results from an earlier run would otherwise be read as this one's.
   rmSync(outputDir, { recursive: true, force: true });
@@ -189,32 +266,41 @@ function measure(side, device, options) {
       `${argumentsPrefix}androidx.benchmark.suppressErrors=EMULATOR`
     );
   }
-  if (options.documents) {
+  const documents = document ?? options.documents;
+  if (documents) {
     instrumentationArguments.push(
-      `${argumentsPrefix}mdbench.documents=${options.documents}`
+      `${argumentsPrefix}mdbench.documents=${documents}`
     );
   }
   gradle(side, 'connectedReleaseAndroidTest', device, instrumentationArguments);
 
   const resultsFile = findFile(outputDir, (name) =>
-    name.endsWith('-benchmarkData.json')
+    name.endsWith(resultsSuffix)
   );
   if (!resultsFile) {
     throw new Error(`${side.label}: no benchmark results under ${outputDir}`);
   }
+  const results = parseResults(JSON.parse(readFileSync(resultsFile, 'utf8')));
+  if (results.size === 0) {
+    throw new Error(`${side.label}: ${resultsFile} has no measurements`);
+  }
   if (options.output) {
+    // One results file per run, so runs of single documents do not overwrite
+    // each other; the screenshots are already named after their document.
     const destination = path.join(options.output, side.label);
     mkdirSync(destination, { recursive: true });
     for (const entry of readdirSync(path.dirname(resultsFile))) {
-      if (entry.endsWith('.json') || entry.endsWith('.png')) {
+      const source = path.join(path.dirname(resultsFile), entry);
+      if (entry.endsWith(resultsSuffix)) {
         copyFileSync(
-          path.join(path.dirname(resultsFile), entry),
-          path.join(destination, entry)
+          source,
+          path.join(destination, `${document ?? 'all'}${resultsSuffix}`)
         );
+      } else if (entry.endsWith('.png')) {
+        copyFileSync(source, path.join(destination, entry));
       }
     }
   }
-  const results = parseResults(JSON.parse(readFileSync(resultsFile, 'utf8')));
   console.log(`  ${results.size} measurements`);
   return results;
 }
@@ -244,39 +330,64 @@ function gradle(side, task, device, extraArguments = []) {
 
 // One entry of the benchmark library's JSON per test, named like
 // "full[complex_large]", prefixed by any suppressed error ("EMULATOR_...").
+// An entry that does not read that way stops the run rather than dropping out
+// of the report, which would then look complete. Only names that match and
+// finite numbers are kept, so nothing else in the file reaches the report.
 export function parseResults(json) {
   const results = new Map();
-  for (const entry of json.benchmarks ?? []) {
-    const match = /^(?:[A-Z][A-Z0-9-]*_)*(\w+)\[(\w+)\]$/.exec(entry.name);
-    const time = entry.metrics?.timeNs;
-    if (!match || !time) continue;
+  for (const entry of json?.benchmarks ?? []) {
+    const name = String(entry?.name);
+    const match = /^(?:[A-Z][A-Z0-9-]*_)*(\w+)\[(\w+)\]$/.exec(name);
+    const time = entry?.metrics?.timeNs;
+    if (!match || !isFinitePositive(time?.median)) {
+      throw new Error(`unrecognized benchmark result ${JSON.stringify(name)}`);
+    }
     const [, benchmark, document] = match;
-    results.set(`${document}|${benchmark}`, {
+    const key = `${document}|${benchmark}`;
+    if (results.has(key)) {
+      throw new Error(`${benchmark}[${document}] measured twice`);
+    }
+    results.set(key, {
       document,
       benchmark,
       time: time.median,
-      deviation: time.coefficientOfVariation,
-      allocations: entry.metrics.allocationCount?.median,
+      deviation: finiteOrUndefined(time.coefficientOfVariation),
+      allocations: finiteOrUndefined(entry.metrics.allocationCount?.median),
     });
   }
   return results;
 }
 
-// The plain-text and Markdown reports, one row per document and benchmark.
+function isFinitePositive(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function finiteOrUndefined(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+// The plain-text and Markdown reports, one row per document and benchmark
+// measured on either side; a row measured on one side only has no ratio.
 export function report(head, base) {
-  const rows = [...head.values()].sort(byReportOrder).map((measurement) => {
-    const other = base?.get(`${measurement.document}|${measurement.benchmark}`);
-    const ratio = other ? measurement.time / other.time : null;
-    return {
-      document: measurement.document,
-      benchmark: measurement.benchmark,
-      base: other ? formatTime(other) : '',
-      head: formatTime(measurement),
-      ratio,
-      verdict: ratio ? verdictFor(ratio) : null,
-      allocations: formatAllocations(other, measurement),
-    };
-  });
+  const keys = new Set([...head.keys(), ...(base?.keys() ?? [])]);
+  const rows = [...keys]
+    .map((key) => ({ head: head.get(key), base: base?.get(key) }))
+    .map(({ head: after, base: before }) => {
+      const { document, benchmark } = after ?? before;
+      const ratio = after && before ? after.time / before.time : null;
+      return {
+        document,
+        benchmark,
+        base: before ? formatTime(before) : '',
+        head: after ? formatTime(after) : '',
+        ratio,
+        verdict: ratio ? verdictFor(ratio) : null,
+        allocations: formatAllocations(before, after),
+      };
+    })
+    .sort(byReportOrder);
 
   const header = base
     ? ['document', 'benchmark', 'base', 'head', 'head/base', 'allocations']
@@ -316,6 +427,7 @@ export function report(head, base) {
     `${marker('faster')} faster than ${noiseBand.faster}×`,
     `${marker('same')} within noise`,
     `${marker('slower')} slower than ${noiseBand.slower}×`,
+    `${marker('missing')} measured on one side only`,
   ].join(' · ');
   const markdown = [
     base ? summarize(rows) : null,
@@ -364,24 +476,32 @@ function summarize(rows) {
     rows.filter((row) => row.verdict === verdict).length;
   const slower = count('slower');
   const faster = count('faster');
-  if (slower === 0 && faster === 0) {
+  const missing = count(null);
+  if (slower === 0 && faster === 0 && missing === 0) {
     return `${marker('same')} No benchmark differs from the base beyond noise.`;
   }
   return [
     slower ? `${marker('slower')} ${slower} slower` : null,
     faster ? `${marker('faster')} ${faster} faster` : null,
     `${marker('same')} ${count('same')} within noise`,
+    missing
+      ? `${marker('missing')} ${missing} measured on one side only`
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
 }
 
 function marker(verdict) {
-  return { slower: '🟠', faster: '🟢', same: '⚪' }[verdict] ?? '';
+  return (
+    { slower: '🟠', faster: '🟢', same: '⚪', missing: '⚠️' }[verdict] ?? ''
+  );
 }
 
 function markRatio(row) {
-  return row.ratio ? `${marker(row.verdict)} ${formatRatio(row.ratio)}` : '';
+  return row.ratio
+    ? `${marker(row.verdict)} ${formatRatio(row.ratio)}`
+    : marker('missing');
 }
 
 function formatRatio(ratio) {
@@ -456,6 +576,7 @@ function parseArgs(argv) {
     '--documents': 'documents',
     '--markdown': 'markdown',
     '--output': 'output',
+    '--report': 'report',
   };
   for (let index = 0; index < argv.length; index += 2) {
     const key = flags[argv[index]];

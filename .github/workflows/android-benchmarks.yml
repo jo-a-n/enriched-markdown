@@ -4,6 +4,9 @@ name: Android benchmarks
 # request, or start it from the Actions tab with the pull request number. The
 # display benchmark runs on the pull request head and on the tip of main, back
 # to back on one emulator, and the table is posted as a comment.
+#
+# A pull request from a fork runs only at a commit the requester names, the
+# one they reviewed: `/benchmark android <full head SHA>`.
 on:
   issue_comment:
     types: [created]
@@ -13,20 +16,16 @@ on:
         description: Pull request number
         required: true
         type: number
-
-# Every comment on a pull request starts a run. The ones that are not a
-# benchmark request get a group of their own, so they cannot cancel one that is.
-concurrency:
-  group: >-
-    ${{ github.event_name == 'issue_comment' && !startsWith(github.event.comment.body, '/benchmark android')
-    && format('android-benchmarks-ignored-{0}', github.run_id)
-    || format('android-benchmarks-{0}', github.event.issue.number || inputs.pull_request) }}
-  cancel-in-progress: true
+      commit:
+        description: Full SHA of the head commit you reviewed (required for a pull request from a fork)
+        required: false
+        type: string
 
 jobs:
   resolve:
     # A comment-triggered run builds and runs the pull request's code, so only
-    # people with write access may start one.
+    # people with write access may start one. The author association is a
+    # cheap first filter; the permission check below is the one that counts.
     if: >-
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/benchmark android') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
       || github.event_name == 'workflow_dispatch'
@@ -41,6 +40,20 @@ jobs:
       base: ${{ steps.pr.outputs.base }}
       behind: ${{ steps.pr.outputs.behind }}
     steps:
+      - name: Check the commenter's permission
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          PERMISSION=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)
+          # maintain reads as write here, and triage as read.
+          if [[ "$PERMISSION" != admin && "$PERMISSION" != write ]]; then
+            echo "::error::@$COMMENTER has $PERMISSION access; a benchmark needs write access"
+            exit 1
+          fi
+
       - name: Acknowledge the comment
         if: github.event_name == 'issue_comment'
         env:
@@ -50,19 +63,51 @@ jobs:
             -f content=rocket --silent || true
 
       # Both commits are pinned here, so a push during the run changes neither
-      # what is measured nor what the comment says was measured.
+      # what is measured nor what the comment says was measured. A fork's head
+      # is measured only when it is the commit the requester named, so a push
+      # between the review and this step cannot swap in code nobody reviewed.
       - name: Resolve the commits
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
           NUMBER: ${{ github.event.issue.number || inputs.pull_request }}
+          BODY: ${{ github.event.comment.body }}
+          COMMIT: ${{ inputs.commit }}
         run: |
           set -euo pipefail
-          HEAD=$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+          refuse() {
+            echo "::error::$1"
+            if [[ "$EVENT" == issue_comment ]]; then
+              gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" -f body="$1" --silent || true
+            fi
+            exit 1
+          }
+
+          # `/benchmark android [commit]`, on the first line of the comment.
+          REQUESTED=$COMMIT
+          if [[ "$EVENT" == issue_comment ]]; then
+            read -r _ _ REQUESTED _ <<< "$(head -n 1 <<< "$BODY" | tr -d '\r')"
+          fi
+          REQUESTED=${REQUESTED:-}
+          if [[ -n "$REQUESTED" && ! "$REQUESTED" =~ ^[0-9a-f]{40}$ ]]; then
+            refuse "Name the commit with its full 40-character SHA, as in \`/benchmark android <SHA>\`."
+          fi
+
+          PR=$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,isCrossRepository \
+            --jq '"\(.headRefOid) \(.isCrossRepository)"')
+          HEAD=${PR% *}
+          FORK=${PR#* }
           BASE=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
           if [[ -z "$HEAD" || -z "$BASE" ]]; then
             echo "::error::Could not resolve the head of pull request #$NUMBER or the tip of main"
             exit 1
+          fi
+          if [[ -z "$REQUESTED" && "$FORK" == true ]]; then
+            refuse "#$NUMBER comes from a fork, so the benchmark runs its code only at a commit you name. Review the head, then comment \`/benchmark android $HEAD\`."
+          fi
+          if [[ -n "$REQUESTED" && "$REQUESTED" != "$HEAD" ]]; then
+            refuse "The head of #$NUMBER is now \`$HEAD\`, not the requested \`$REQUESTED\`. Review what changed, then request the benchmark at the new head."
           fi
           # Informational only: a head behind main also measures what main gained since.
           BEHIND=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq .behind_by || echo "")
@@ -77,17 +122,25 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # A newer request for the same pull request replaces this one. The group is
+    # set here rather than on the workflow so that only a request that passed
+    # the checks in resolve can cancel a run.
+    concurrency:
+      group: android-benchmarks-${{ needs.resolve.outputs.number }}
+      cancel-in-progress: true
     # Runs the pull request's code, so the token can only read.
     permissions:
       contents: read
     steps:
       # The tooling comes from main; the pull request is measured in a worktree,
-      # which also works for branches older than the script.
+      # which also works for branches older than the script. The token is not
+      # left in .git/config, which the worktree shares.
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ needs.resolve.outputs.base }}
           fetch-depth: 0
+          persist-credentials: false
 
       # Pull requests from forks are only reachable through their pull ref.
       - name: Fetch the pull request
@@ -103,10 +156,13 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      # This run belongs to main, so a cache it saved would be restored by every
+      # later run on main; the pull request's build must not write one.
       - name: Setup Android
         uses: ./.github/actions/setup-android
         with:
           gradle-wrapper-properties: packages/enriched-markdown-android/gradle/wrapper/gradle-wrapper.properties
+          cache: restore
 
       - name: Enable KVM
         run: |
@@ -117,6 +173,12 @@ jobs:
       # An ATD image runs fewer background services than a regular one, which
       # is less noise under the measurements. The benchmark library refuses to
       # measure a locked screen, so it is kept on and unlocked.
+      #
+      # The script inherits this action's environment, which holds the token
+      # that writes caches and artifacts; the pull request's build is started
+      # without it. That only narrows what it is handed, since code on the
+      # runner can still find the token, so the workflows that hold secrets
+      # restore no cache at all.
       - name: Compare the pull request against main
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
@@ -130,7 +192,7 @@ jobs:
             adb shell svc power stayon true
             adb shell input keyevent KEYCODE_WAKEUP
             adb shell wm dismiss-keyguard
-            node packages/enriched-markdown-android/display-benchmark/tools/compare.mjs --head ${{ needs.resolve.outputs.head }} --base ${{ needs.resolve.outputs.base }} --markdown "$RUNNER_TEMP/android-benchmarks/results.md" --output "$RUNNER_TEMP/android-benchmarks"
+            env -u ACTIONS_RUNTIME_TOKEN -u ACTIONS_RUNTIME_URL -u ACTIONS_CACHE_URL -u ACTIONS_RESULTS_URL node packages/enriched-markdown-android/display-benchmark/tools/compare.mjs --head ${{ needs.resolve.outputs.head }} --base ${{ needs.resolve.outputs.base }} --output "$RUNNER_TEMP/android-benchmarks"
 
       - name: Upload the results
         if: ${{ !cancelled() }}
@@ -141,15 +203,36 @@ jobs:
           if-no-files-found: ignore
 
   # Separate from the job that runs the pull request's code, so that code never
-  # holds a token that can write to the repository.
+  # holds a token that can write to the repository. A run replaced by a newer
+  # request leaves the report to that one.
   report:
     needs: [resolve, benchmark]
-    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.benchmark.result != 'cancelled' }}
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       issues: write
       pull-requests: write
     steps:
+      # The job that measured ran the pull request's code, so nothing it wrote
+      # is posted as it is. The table is made here, by the script from main,
+      # from the results JSON read as data: names that match and numbers.
+      - name: Checkout the report script
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.resolve.outputs.base }}
+          path: tooling
+          persist-credentials: false
+          sparse-checkout: |
+            .nvmrc
+            packages/enriched-markdown-android/display-benchmark/tools
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: tooling/.nvmrc
+
       - name: Download the results
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -157,8 +240,16 @@ jobs:
           name: android-benchmarks
           path: results
 
+      - name: Make the table
+        id: table
+        if: needs.benchmark.result == 'success'
+        continue-on-error: true
+        run: node tooling/packages/enriched-markdown-android/display-benchmark/tools/compare.mjs --report results --markdown table.md
+
       - name: Comment on the pull request
         env:
+          BENCHMARK: ${{ needs.benchmark.result }}
+          TABLE: ${{ steps.table.outcome }}
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ needs.resolve.outputs.number }}
           HEAD: ${{ needs.resolve.outputs.head }}
@@ -180,10 +271,12 @@ jobs:
               echo "The pull request is $BEHIND commit(s) behind \`main\`, so the difference also includes what \`main\` gained since. Rebase it to measure its own changes alone."
               echo
             fi
-            if [[ -f results/results.md ]]; then
-              cat results/results.md
-            else
+            if [[ "$BENCHMARK" != success ]]; then
               echo "The benchmark did not finish, so there are no results to compare."
+            elif [[ "$TABLE" != success ]]; then
+              echo "The benchmark finished, but its results could not be read; see the run."
+            else
+              cat table.md
             fi
             echo
             echo "[Run]($RUN_URL)"
