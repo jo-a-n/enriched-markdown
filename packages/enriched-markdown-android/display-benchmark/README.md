@@ -111,8 +111,9 @@ module does not benchmark and does not carry.
 
 ## Running
 
-A **physical device**, not an emulator. Numbers from an emulator are meaningless here.
-Lock clocks if the device supports it, keep it cool and plugged in, and close other apps.
+A **physical device** for numbers you can quote. An emulator only shows the direction of a
+change between two commits measured back to back (see [CI](#ci)). Lock clocks if the device
+supports it, keep it cool and plugged in, and close other apps.
 
 Keep the screen **on and unlocked** for the whole run; the benchmark library refuses to
 measure a locked device.
@@ -197,12 +198,10 @@ shows the direction of a change, not its size.
 
 ## CI
 
-This module is deliberately absent from `.github/workflows/ci.yml`: microbenchmarks need a
-physical device with locked clocks to produce stable numbers.
-
 `.github/workflows/android-benchmarks.yml` runs the comparison on demand, on an emulator.
-Comment `/benchmark android` on a pull request (write access required), or start the
-workflow from the Actions tab with the pull request number. It measures the pull request
+It is not part of `.github/workflows/ci.yml`: emulator numbers are too noisy to gate a pull
+request on. Comment `/benchmark android` on a pull request (write access required), or start
+the workflow from the Actions tab with the pull request number. It measures the pull request
 head against the tip of `main` and comments the table, with both commits, on the pull
 request. Those numbers only show the direction of a change; confirm it on a physical device.
 
