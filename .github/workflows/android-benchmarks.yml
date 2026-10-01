@@ -1,12 +1,8 @@
 name: Android benchmarks
 
-# On demand, not on every pull request: comment `/benchmark android` on a pull
-# request, or start it from the Actions tab with the pull request number. The
-# display benchmark runs on the pull request head and on the tip of main, back
-# to back on one emulator, and the table is posted as a comment.
-#
-# A pull request from a fork runs only at a commit the requester names, the
-# one they reviewed: `/benchmark android <full head SHA>`.
+# Comment `/benchmark android` on a pull request, or dispatch with its number,
+# to compare its head against main on one emulator and post the table.
+# Forks run only at a reviewed commit: `/benchmark android <full head SHA>`.
 on:
   issue_comment:
     types: [created]
@@ -23,9 +19,8 @@ on:
 
 jobs:
   resolve:
-    # A comment-triggered run builds and runs the pull request's code, so only
-    # people with write access may start one. The author association is a
-    # cheap first filter; the permission check below is the one that counts.
+    # Runs pull request code, so it needs write access. The association is a
+    # cheap prefilter; the permission check below decides.
     if: >-
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/benchmark android') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
       || github.event_name == 'workflow_dispatch'
@@ -62,10 +57,8 @@ jobs:
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content=rocket --silent || true
 
-      # Both commits are pinned here, so a push during the run changes neither
-      # what is measured nor what the comment says was measured. A fork's head
-      # is measured only when it is the commit the requester named, so a push
-      # between the review and this step cannot swap in code nobody reviewed.
+      # Pins both commits, so a push during the run changes nothing. A fork is
+      # measured only at the commit the requester reviewed.
       - name: Resolve the commits
         id: pr
         env:
@@ -122,9 +115,8 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    # A newer request for the same pull request replaces this one. The group is
-    # set here rather than on the workflow so that only a request that passed
-    # the checks in resolve can cancel a run.
+    # A newer request cancels this one. Set on the job, not the workflow, so
+    # only a request that passed resolve can cancel.
     concurrency:
       group: android-benchmarks-${{ needs.resolve.outputs.number }}
       cancel-in-progress: true
@@ -132,9 +124,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The tooling comes from main; the pull request is measured in a worktree,
-      # which also works for branches older than the script. The token is not
-      # left in .git/config, which the worktree shares.
+      # Tooling comes from main; the pull request is built in a worktree, which
+      # shares .git/config, so no credentials are persisted.
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -156,8 +147,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # This run belongs to main, so a cache it saved would be restored by every
-      # later run on main; the pull request's build must not write one.
+      # Restore only: a cache saved from this run would reach later runs on main.
       - name: Setup Android
         uses: ./.github/actions/setup-android
         with:
@@ -170,15 +160,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # An ATD image runs fewer background services than a regular one, which
-      # is less noise under the measurements. The benchmark library refuses to
-      # measure a locked screen, so it is kept on and unlocked.
-      #
-      # The script inherits this action's environment, which holds the token
-      # that writes caches and artifacts; the pull request's build is started
-      # without it. That only narrows what it is handed, since code on the
-      # runner can still find the token, so the workflows that hold secrets
-      # restore no cache at all.
+      # ATD images run fewer background services, so there is less noise. The
+      # screen stays unlocked; the benchmark library refuses a locked one. The
+      # build runs without the token that writes caches and artifacts.
       - name: Compare the pull request against main
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
@@ -202,9 +186,8 @@ jobs:
           path: ${{ runner.temp }}/android-benchmarks
           if-no-files-found: ignore
 
-  # Separate from the job that runs the pull request's code, so that code never
-  # holds a token that can write to the repository. A run replaced by a newer
-  # request leaves the report to that one.
+  # Kept apart so pull request code never holds a write token. A cancelled run
+  # leaves the report to the newer one.
   report:
     needs: [resolve, benchmark]
     if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.benchmark.result != 'cancelled' }}
@@ -214,9 +197,8 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      # The job that measured ran the pull request's code, so nothing it wrote
-      # is posted as it is. The table is made here, by the script from main,
-      # from the results JSON read as data: names that match and numbers.
+      # The results came from pull request code, so main's script reads them as
+      # data only.
       - name: Checkout the report script
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

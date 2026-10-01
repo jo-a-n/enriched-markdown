@@ -25,9 +25,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      # Holds the signing and Maven Central secrets, so it builds without the
-      # Gradle cache: a cache entry can be written by any run on main, including
-      # android-benchmarks, which builds pull request code.
+      # Holds secrets, so no Gradle cache: android-benchmarks can write one.
       - name: Setup Android
         uses: ./.github/actions/setup-android
         with:

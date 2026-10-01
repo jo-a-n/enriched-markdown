@@ -1,15 +1,10 @@
 #!/usr/bin/env node
 // Runs the display benchmark on this checkout and, with --base <ref>, on that
-// ref in a temporary worktree, then prints both with the head/base ratio.
-// Absolute numbers depend on the device; the ratio between two runs on the
-// same device, back to back, is what to read. Each time is the median the
-// benchmark library reports.
+// ref in a worktree, then prints the median times and their head/base ratio.
+// Read the ratio; absolute numbers depend on the device.
 //
-// With a base, each document is measured on its own, head and base back to
-// back, and which side goes first alternates from one document to the next.
-// The device drifts over a session (background work after boot, cache and JIT
-// state, heat), and measuring one whole side before the other would show that
-// drift as a difference between the two.
+// Each document is measured head and base back to back, alternating which goes
+// first, so device drift does not show up as a difference.
 //
 //   node display-benchmark/tools/compare.mjs                   # this checkout only
 //   node display-benchmark/tools/compare.mjs --base main       # this checkout vs main
@@ -23,9 +18,7 @@
 //   --documents <list>    comma-separated subset of the fixtures, e.g. complex_large
 //   --markdown <file>     also append the report to <file> as Markdown (e.g. $GITHUB_STEP_SUMMARY)
 //   --output <dir>        copy each side's results JSON and screenshots into <dir>/<side>
-//   --report <dir>        measure nothing; report on the results JSON a run saved with --output.
-//                         The JSON is read as data alone, so a report can be made from results
-//                         that untrusted code produced.
+//   --report <dir>        measure nothing; report on results saved with --output (read as data)
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -57,7 +50,7 @@ const outputRelative = path.join(
 );
 const workDir = path.join(tmpdir(), 'enriched-markdown-android-benchmark');
 
-// Row order in the report; anything else is appended in the order it came.
+// Row order in the report; anything else goes last.
 const documentOrder = [
   'simple_small',
   'simple_medium',
@@ -102,8 +95,7 @@ function main(options) {
     );
     if (options.base) sides.push(addWorktree('base', options.base));
 
-    // Both sides build before either measures, so the measurements run back
-    // to back on a device that is not sharing the machine with a build.
+    // Build both sides first, so no build runs during the measurements.
     for (const side of sides) {
       gradle(side, 'assembleReleaseAndroidTest', device);
     }
@@ -221,8 +213,7 @@ function connectDevice(requested) {
 function addWorktree(label, ref) {
   const commit = git(['rev-parse', '--verify', `${ref}^{commit}`]).trim();
   const worktree = path.join(workDir, `${label}-${commit.slice(0, 12)}`);
-  // An interrupted run leaves the worktree behind; --force re-adds it even
-  // while the removed directory is still registered.
+  // --force re-adds a worktree an interrupted run left registered.
   rmSync(worktree, { recursive: true, force: true });
   git(['worktree', 'add', '--force', '--detach', worktree, commit]);
   const side = {
@@ -237,7 +228,7 @@ function addWorktree(label, ref) {
       `${ref} (${commit.slice(0, 12)}) has no ${moduleName} module to run`
     );
   }
-  // The SDK location, when this checkout has one, applies to the worktree too.
+  // Reuse this checkout's SDK location, if any.
   const localProperties = path.join(packageDir, 'local.properties');
   if (existsSync(localProperties)) {
     copyFileSync(localProperties, path.join(side.dir, 'local.properties'));
@@ -249,16 +240,15 @@ function removeWorktree(worktree) {
   git(['worktree', 'remove', '--force', worktree]);
 }
 
-// Runs the benchmark once on one side: every requested document, or just
-// `document` when given.
+// Runs the benchmark on one side, for `document` alone when given.
 function measure(side, device, options, document) {
   const outputDir = path.join(side.dir, outputRelative);
-  // Results from an earlier run would otherwise be read as this one's.
+  // Drop an earlier run's results.
   rmSync(outputDir, { recursive: true, force: true });
 
   const argumentsPrefix = '-Pandroid.testInstrumentationRunnerArguments.';
   const instrumentationArguments = [
-    // The profiling pass runs after the measurements and only produces traces.
+    // Skip the profiling pass; it only produces traces.
     `${argumentsPrefix}androidx.benchmark.profiling.mode=none`,
   ];
   if (device.emulator) {
@@ -285,8 +275,7 @@ function measure(side, device, options, document) {
     throw new Error(`${side.label}: ${resultsFile} has no measurements`);
   }
   if (options.output) {
-    // One results file per run, so runs of single documents do not overwrite
-    // each other; the screenshots are already named after their document.
+    // One results file per document; screenshots are already named that way.
     const destination = path.join(options.output, side.label);
     mkdirSync(destination, { recursive: true });
     for (const entry of readdirSync(path.dirname(resultsFile))) {
@@ -328,11 +317,9 @@ function gradle(side, task, device, extraArguments = []) {
   }
 }
 
-// One entry of the benchmark library's JSON per test, named like
-// "full[complex_large]", prefixed by any suppressed error ("EMULATOR_...").
-// An entry that does not read that way stops the run rather than dropping out
-// of the report, which would then look complete. Only names that match and
-// finite numbers are kept, so nothing else in the file reaches the report.
+// Entries are named like "full[complex_large]", maybe prefixed by suppressed
+// errors ("EMULATOR_..."). Anything else throws rather than silently missing
+// from the report; only matching names and finite numbers are kept.
 export function parseResults(json) {
   const results = new Map();
   for (const entry of json?.benchmarks ?? []) {
@@ -368,8 +355,7 @@ function finiteOrUndefined(value) {
     : undefined;
 }
 
-// The plain-text and Markdown reports, one row per document and benchmark
-// measured on either side; a row measured on one side only has no ratio.
+// Text and Markdown reports; a row measured on one side only has no ratio.
 export function report(head, base) {
   const keys = new Set([...head.keys(), ...(base?.keys() ?? [])]);
   const rows = [...keys]
@@ -520,8 +506,7 @@ function formatTime({ time, deviation }) {
     : `${formatted} ±${(deviation * 100).toFixed(0)}%`;
 }
 
-// Allocation counts vary by about a percent between runs, far less than times
-// do on an emulator, so a difference beyond that is worth showing.
+// Allocation counts vary about 1% between runs, so larger changes are shown.
 function formatAllocations(base, head) {
   const count = (measurement) =>
     measurement?.allocations === undefined
