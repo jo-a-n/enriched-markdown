@@ -85,6 +85,9 @@ if (
 function main(options) {
   const device = connectDevice(options.serial);
   mkdirSync(workDir, { recursive: true });
+  // Ctrl+C also stops the child process; staying alive lets the finally below
+  // remove the worktrees.
+  process.on('SIGINT', () => {});
 
   const sides = [];
   try {
@@ -216,28 +219,33 @@ function addWorktree(label, ref) {
   // --force re-adds a worktree an interrupted run left registered.
   rmSync(worktree, { recursive: true, force: true });
   git(['worktree', 'add', '--force', '--detach', worktree, commit]);
-  const side = {
-    label,
-    commit,
-    worktree,
-    dir: path.join(worktree, packageRelative),
-  };
-  if (!existsSync(path.join(side.dir, moduleName))) {
+  try {
+    const dir = path.join(worktree, packageRelative);
+    if (!existsSync(path.join(dir, moduleName))) {
+      throw new Error(
+        `${ref} (${commit.slice(0, 12)}) has no ${moduleName} module to run`
+      );
+    }
+    // Reuse this checkout's SDK location, if any.
+    const localProperties = path.join(packageDir, 'local.properties');
+    if (existsSync(localProperties)) {
+      copyFileSync(localProperties, path.join(dir, 'local.properties'));
+    }
+    return { label, commit, worktree, dir };
+  } catch (error) {
     removeWorktree(worktree);
-    throw new Error(
-      `${ref} (${commit.slice(0, 12)}) has no ${moduleName} module to run`
-    );
+    throw error;
   }
-  // Reuse this checkout's SDK location, if any.
-  const localProperties = path.join(packageDir, 'local.properties');
-  if (existsSync(localProperties)) {
-    copyFileSync(localProperties, path.join(side.dir, 'local.properties'));
-  }
-  return side;
 }
 
+// Warns instead of throwing, so a failed removal neither hides the run's error
+// nor skips the other worktrees.
 function removeWorktree(worktree) {
-  git(['worktree', 'remove', '--force', worktree]);
+  try {
+    git(['worktree', 'remove', '--force', worktree]);
+  } catch (error) {
+    console.warn(`Could not remove the worktree ${worktree}: ${error.message}`);
+  }
 }
 
 // Runs the benchmark on one side, for `document` alone when given.
@@ -313,7 +321,10 @@ function gradle(side, task, device, extraArguments = []) {
     }
   );
   if (result.status !== 0) {
-    throw new Error(`${side.label}: ${task} exited with ${result.status}`);
+    const outcome = result.signal
+      ? `was stopped by ${result.signal}`
+      : `exited with ${result.status}`;
+    throw new Error(`${side.label}: ${task} ${outcome}`);
   }
 }
 
