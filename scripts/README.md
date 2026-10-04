@@ -20,3 +20,18 @@ Author handles and the New Contributors section are resolved through an authenti
 ## fetch-md4c.sh
 
 Syncs `packages/core/cpp/enrmrkd` from our MD4C fork [software-mansion-labs/md4c](https://github.com/software-mansion-labs/md4c), whose parser carries an `ENRMRKD_`/`enrmrkd_` prefix so it cannot clash with another embedded MD4C copy. Run via `yarn workspace react-native-enriched-markdown sync-md4c`.
+
+## test-core-parser.sh
+
+Host-compiled checks for `packages/core/cpp`, run in CI by the `core-parser` job whenever that directory (or this script, or `fetch-md4c.sh`) changes. It builds the vendored parser and `MD4CParser` with the system toolchain and then:
+
+- asserts the vendored parser exports nothing but `enrmrkd_*`, so it cannot collide with another embedded MD4C copy ([#846](https://github.com/software-mansion/enriched-markdown/issues/846));
+- compares the serialized AST of `packages/core/cpp/tests/fixtures/*.md`, under five flag variants, against the golden dump in `packages/core/cpp/tests/golden/ast.txt`;
+- links the parser beside upstream `mity/md4c` (pinned tag) in one binary and runs both.
+
+```sh
+./scripts/test-core-parser.sh            # verify
+./scripts/test-core-parser.sh --update   # re-record the golden dump after an intended change
+```
+
+A `sync-md4c` that changes parsing shows up here as a golden diff to review, rather than reaching a release unnoticed.
