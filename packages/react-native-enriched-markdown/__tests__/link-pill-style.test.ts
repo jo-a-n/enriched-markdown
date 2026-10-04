@@ -182,3 +182,35 @@ it('treats structurally equal per-link content as unchanged', () => {
   expect(isLinkPillContentEqual(undefined, undefined)).toBe(true);
   expect(isLinkPillContentEqual(undefined, make('a.ts'))).toBe(false);
 });
+
+it('keeps original icon colors by default and passes an explicit tint, including transparent', () => {
+  const style = normalizeMarkdownStyle({
+    linkVariants: {
+      '^plain:': { pill: true },
+      '^tinted:': { pill: { iconTintColor: '#abcdef' } },
+      '^clear:': { pill: { iconTintColor: 'transparent' } },
+    },
+  });
+  const pill = (pattern: string) =>
+    style.linkVariants.find((variant) => variant.pattern === pattern)?.pill;
+  expect(pill('^plain:')?.iconTintColor).toBeUndefined();
+  expect(pill('^tinted:')?.iconTintColor).toBe(normalizeColor('#abcdef'));
+  expect(pill('^clear:')?.iconTintColor).toBe(normalizeColor('transparent'));
+  expect(
+    normalizeWebStyle({
+      linkVariants: { '^app:': { pill: { iconTintColor: '#abcdef' } } },
+    }).linkVariants[0]?.pill.iconTintColor
+  ).toBe('#abcdef');
+});
+
+it('ignores an invalid icon tint instead of making the icon transparent', () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const style = normalizeMarkdownStyle({
+    linkVariants: { '^app:': { pill: { iconTintColor: 'invalid color' } } },
+  });
+  expect(style.linkVariants[0]?.pill.iconTintColor).toBeUndefined();
+  expect(warn).toHaveBeenCalledWith(
+    expect.stringContaining('Ignoring invalid color')
+  );
+  warn.mockRestore();
+});

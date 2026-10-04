@@ -263,6 +263,8 @@ class LinkPillSpan(
         val scale = fontSize / max(it.width, it.height)
         innerRect.set(left, iconTop, left + it.width * scale, iconTop + it.height * scale)
         innerRect.offset((fontSize - innerRect.width()) / 2, (fontSize - innerRect.height()) / 2)
+        // The paint is shared by all pills, so the tint is set for every icon, tinted or not.
+        iconPaint.colorFilter = pill.iconTint
         canvas.drawBitmap(it, null, innerRect, iconPaint)
       }
       left += fontSize * ICON_SLOT_RATIO

@@ -1,12 +1,17 @@
 package com.swmansion.enriched.markdown.styles
 
 import android.graphics.Color
+import android.graphics.ColorFilter
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import com.facebook.react.bridge.ReadableMap
 
 /** Geometry and default content of a variant's pill. Dimensions are in pixels. */
 data class LinkPillStyle(
   val label: String = "",
   val iconUri: String = "",
+  /** Null keeps the icon's own colors. */
+  val iconTintColor: Int? = null,
   val borderRadius: Float = 8f,
   val paddingHorizontal: Float = 6f,
   val paddingVertical: Float = 2f,
@@ -14,6 +19,9 @@ data class LinkPillStyle(
   val borderColor: Int = Color.TRANSPARENT,
   val maxWidth: Float = 0f,
 ) {
+  /** Replaces the icon's colors and keeps its alpha; shared by every pill of the variant. */
+  val iconTint: ColorFilter? = iconTintColor?.let { PorterDuffColorFilter(it, PorterDuff.Mode.SRC_IN) }
+
   companion object {
     /** Returns null when the variant does not enable pill presentation. */
     fun fromReadableMap(
@@ -24,6 +32,7 @@ data class LinkPillStyle(
       return LinkPillStyle(
         label = parser.parseString(map, "label"),
         iconUri = parser.parseString(map, "iconUri"),
+        iconTintColor = parser.parseOptionalColor(map, "iconTintColor"),
         borderRadius = parser.toPixelFromDIP(parser.parseOptionalDouble(map, "borderRadius", 8.0).toFloat()),
         paddingHorizontal = parser.toPixelFromDIP(parser.parseOptionalDouble(map, "paddingHorizontal", 6.0).toFloat()),
         paddingVertical = parser.toPixelFromDIP(parser.parseOptionalDouble(map, "paddingVertical", 2.0).toFloat()),

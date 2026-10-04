@@ -123,6 +123,7 @@ const markdownStyle = {
 | ------------------------ | ------------------ | --------------------------------------------------------------------- |
 | `pill.label`             | Original link text | Label shown by every link the pattern matches.                        |
 | `pill.iconUri`           | No icon            | Icon shown by every link the pattern matches. See icon sources below. |
+| `pill.iconTintColor`     | No tint            | Replaces the icon's colors, keeping its alpha. Omit to keep them.     |
 | `pill.borderRadius`      | `8`                | Corner radius in points/DIP.                                          |
 | `pill.paddingHorizontal` | `6`                | Horizontal inset in points/DIP.                                       |
 | `pill.paddingVertical`   | `2`                | Vertical inset in points/DIP.                                         |

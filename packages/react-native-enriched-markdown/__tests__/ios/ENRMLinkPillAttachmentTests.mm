@@ -482,6 +482,60 @@ static NSString *const kDocURL = @"https://example.com/doc";
   [NSFileManager.defaultManager removeItemAtPath:path error:nil];
 }
 
+- (void)testIconTintReplacesIconColorsAndKeepsThemWithoutATint
+{
+  NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"enrm-pill-tint-icon.png"];
+  UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+  format.scale = 1;
+  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(16, 16) format:format];
+  [UIImagePNGRepresentation([renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+    [UIColor.redColor setFill];
+    UIRectFill(CGRectMake(0, 0, 16, 16));
+  }]) writeToFile:path
+       atomically:YES];
+
+  // Counts pixels that are clearly red or clearly blue in a drawn pill.
+  void (^count)(UIColor *, NSUInteger *, NSUInteger *) = ^(UIColor *tint, NSUInteger *red, NSUInteger *blue) {
+    LinkVariantConfig *variant = [self variantWithPill:YES];
+    variant.color = UIColor.blackColor;
+    variant.backgroundColor = UIColor.whiteColor;
+    variant.pill.iconUri = path;
+    variant.pill.iconTintColor = tint;
+    StyleConfig *config = [self configWithPill:YES];
+    [config setLinkVariants:@[ variant ]];
+    ENRMLinkPillAttachment *pill =
+        [self pillsIn:[self render:@"[label](https://example.com/doc)" config:config]].firstObject;
+    CGRect bounds = [self boundsOf:pill inWidth:1000];
+    UIImage *image = [pill imageForBounds:bounds textContainer:nil characterIndex:0];
+    size_t width = CGImageGetWidth(image.CGImage), height = CGImageGetHeight(image.CGImage);
+    NSMutableData *pixels = [NSMutableData dataWithLength:width * height * 4];
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGContextRef bitmap = CGBitmapContextCreate(pixels.mutableBytes, width, height, 8, width * 4, space,
+                                                kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(space);
+    CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), image.CGImage);
+    CGContextRelease(bitmap);
+    const uint8_t *bytes = (const uint8_t *)pixels.bytes;
+    for (size_t offset = 0; offset < pixels.length; offset += 4) {
+      if (bytes[offset] > 215 && bytes[offset + 1] < 40 && bytes[offset + 2] < 40)
+        (*red)++;
+      if (bytes[offset] < 40 && bytes[offset + 1] < 40 && bytes[offset + 2] > 215)
+        (*blue)++;
+    }
+  };
+
+  NSUInteger red = 0, blue = 0;
+  count(nil, &red, &blue);
+  XCTAssertGreaterThan(red, 50u, @"without a tint the icon keeps its own colors");
+  XCTAssertEqual(blue, 0u);
+
+  red = blue = 0;
+  count(UIColor.blueColor, &red, &blue);
+  XCTAssertGreaterThan(blue, 50u, @"the tint replaces the icon's colors");
+  XCTAssertEqual(red, 0u);
+  [NSFileManager.defaultManager removeItemAtPath:path error:nil];
+}
+
 - (void)testFailedIconReleasesItsSlot
 {
   StyleConfig *config = [self configWithPill:YES];

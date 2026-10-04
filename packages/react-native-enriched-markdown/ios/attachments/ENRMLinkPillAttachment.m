@@ -241,7 +241,10 @@ static CGFloat ENRMLinkPillLabelWidth(NSString *label, UIFont *font)
         CGSize iconSize = CGSizeMake(_icon.size.width * scale, _icon.size.height * scale);
         CGRect iconRect = CGRectMake(left + (side - iconSize.width) / 2, (size.height - iconSize.height) / 2,
                                      iconSize.width, iconSize.height);
-        [_icon drawInRect:iconRect];
+        UIImage *presented = _pill.iconTintColor ? [_icon imageWithTintColor:_pill.iconTintColor
+                                                               renderingMode:UIImageRenderingModeAlwaysOriginal]
+                                                 : _icon;
+        [presented drawInRect:iconRect];
       }
       left += side * kIconSlotRatio;
     }
