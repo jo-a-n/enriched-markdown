@@ -3,6 +3,24 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Pill presentation of a link variant: geometry plus the variant-wide default label and icon.
+@interface LinkPillConfig : NSObject
+@property (nonatomic, copy) NSString *label;
+@property (nonatomic, copy) NSString *iconUri;
+@property (nonatomic, assign) CGFloat borderRadius;
+@property (nonatomic, assign) CGFloat paddingHorizontal;
+@property (nonatomic, assign) CGFloat paddingVertical;
+@property (nonatomic, assign) CGFloat borderWidth;
+@property (nonatomic, strong) RCTUIColor *borderColor;
+@property (nonatomic, assign) CGFloat maxWidth;
+@end
+
+/// What one specific link's pill shows (the `linkPillContent` prop), keyed by exact URL.
+@interface LinkPillContent : NSObject
+@property (nonatomic, copy) NSString *label;
+@property (nonatomic, copy) NSString *iconUri;
+@end
+
 /**
  * Resolved style for a single URL-pattern variant (e.g. "^user:", "^channel:", "app\\.example\\.com/user/").
  * The `pattern` field is a regex tested against the full URL in normalized order.
@@ -10,6 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface LinkVariantConfig : NSObject
 @property (nonatomic, copy) NSString *fontFamily;
+/// Pill presentation for links matching this variant; nil when disabled.
+@property (nonatomic, strong, nullable) LinkPillConfig *pill;
 @property (nonatomic, copy) NSString *pattern;
 @property (nonatomic, strong) RCTUIColor *color;
 @property (nonatomic, assign) BOOL underline;
@@ -223,6 +243,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setImageMarginBottom:(CGFloat)newValue;
 - (nullable NSDictionary<NSString *, NSString *> *)imageRequestHeaders;
 - (void)setImageRequestHeaders:(nullable NSDictionary<NSString *, NSString *> *)newValue;
+// Per-link pill content, keyed by exact URL
+- (nullable NSDictionary<NSString *, LinkPillContent *> *)linkPillContent;
+- (void)setLinkPillContent:(nullable NSDictionary<NSString *, LinkPillContent *> *)newValue;
 // Video properties
 - (CGFloat)videoMarginTop;
 - (void)setVideoMarginTop:(CGFloat)newValue;
