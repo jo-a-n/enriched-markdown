@@ -1,4 +1,5 @@
 #import "ENRMLinkContextMenus.h"
+#import "ENRMLinkPillAttachment.h"
 #import "LinkTapUtils.h"
 
 @implementation ENRMLinkContextMenuItem
@@ -99,6 +100,41 @@
 @end
 
 #if !TARGET_OS_OSX
+// Room around the pill on its platter; enough to cover the highlight UIKit draws behind a preview.
+static const CGFloat kPillPreviewInsetX = 6;
+static const CGFloat kPillPreviewInsetY = 4;
+
+/// Without a preview UIKit greys the pressed text out, which hides a pill's own look.
+/// A pill is lifted as itself instead, on a platter in the background color.
+static UITextItemMenuPreview *ENRMLinkPillMenuPreview(UITextView *textView, NSRange range) API_AVAILABLE(ios(17.0))
+{
+  NSTextStorage *storage = textView.textStorage;
+  if (range.location >= storage.length)
+    return nil;
+  id attachment = [storage attribute:NSAttachmentAttributeName atIndex:range.location effectiveRange:NULL];
+  if (![attachment isKindOfClass:ENRMLinkPillAttachment.class])
+    return nil;
+  NSLayoutManager *layoutManager = textView.layoutManager;
+  NSRange glyphs = [layoutManager glyphRangeForCharacterRange:NSMakeRange(range.location, 1) actualCharacterRange:NULL];
+  CGSize size = [layoutManager attachmentSizeForGlyphAtIndex:glyphs.location];
+  if (size.width <= 0 || size.height <= 0)
+    return nil;
+
+  UIImage *image = [(ENRMLinkPillAttachment *)attachment imageForBounds:(CGRect){CGPointZero, size}
+                                                          textContainer:textView.textContainer
+                                                         characterIndex:range.location];
+  UIImageView *pill = [[UIImageView alloc] initWithImage:image];
+  pill.frame = CGRectMake(kPillPreviewInsetX, kPillPreviewInsetY, size.width, size.height);
+
+  UIView *platter = [[UIView alloc]
+      initWithFrame:CGRectMake(0, 0, size.width + 2 * kPillPreviewInsetX, size.height + 2 * kPillPreviewInsetY)];
+  platter.backgroundColor = UIColor.systemBackgroundColor;
+  platter.layer.cornerRadius = 10;
+  platter.layer.cornerCurve = kCACornerCurveContinuous;
+  [platter addSubview:pill];
+  return [[UITextItemMenuPreview alloc] initWithView:platter];
+}
+
 UITextItemMenuConfiguration *ENRMLinkMenuConfigurationForTextItem(UITextView *textView, UITextItem *textItem,
                                                                   UIMenu *defaultMenu, ENRMLinkContextMenus *menus,
                                                                   BOOL linkPreviewEnabled,
@@ -107,7 +143,8 @@ UITextItemMenuConfiguration *ENRMLinkMenuConfigurationForTextItem(UITextView *te
   NSString *url = linkURLAtRange(textView, textItem.range);
   UIMenu *menu = [menus menuForURL:url title:linkTitleAtIndex(textView.textStorage, textItem.range.location)];
   if (menu)
-    return [UITextItemMenuConfiguration configurationWithPreview:nil menu:menu];
+    return [UITextItemMenuConfiguration configurationWithPreview:ENRMLinkPillMenuPreview(textView, textItem.range)
+                                                            menu:menu];
   if (url && !linkPreviewEnabled) {
     if (onLinkLongPress)
       onLinkLongPress(url);
