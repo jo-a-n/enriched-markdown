@@ -255,8 +255,12 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
   NSArray *_cachedAccessibilityElements;
 
   BOOL _imageRemeasurePending;
-  // Frame, in grid coordinates, of the link whose menu is being presented.
+  // Frame, in grid coordinates, of the link whose menu is being presented. Null for the table's own menu.
   CGRect _linkMenuFrame;
+#if !TARGET_OS_OSX
+  // Image of that link, laid over the grid while its menu lifts it.
+  UIImageView *_linkMenuPreview;
+#endif
 }
 
 - (instancetype)initWithConfig:(StyleConfig *)config
@@ -526,6 +530,10 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
   if (_rows.count == 0) {
     return;
   }
+#if !TARGET_OS_OSX
+  // The grid is about to change under the lifted link's image.
+  [self removeLinkMenuPreview];
+#endif
   NSArray<NSNumber *> *oldColWidths = _colWidths;
   NSArray<NSNumber *> *oldRowHeights = _rowHeights;
   CGFloat oldTotalHeight = _totalTableHeight;
@@ -549,27 +557,70 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
 }
 
 #if !TARGET_OS_OSX
-/// A link's menu lifts only the link; the table's own menu (nil identifier) lifts the whole grid.
-- (UITargetedPreview *)linkPreviewForConfiguration:(UIContextMenuConfiguration *)configuration
-                                       interaction:(UIContextMenuInteraction *)interaction
+- (void)removeLinkMenuPreview
 {
-  if (configuration.identifier == nil || interaction.view.window == nil)
+  [_linkMenuPreview removeFromSuperview];
+  _linkMenuPreview = nil;
+}
+
+/// A link's menu lifts only the link; the table's own menu (no link frame) lifts the whole grid.
+/// UIKit hides the view a preview is made of while the menu is open, and draws a preview only
+/// from a view that is on screen. The link is therefore lifted as an image of itself laid over
+/// the grid: a visible path into the grid would hide the rest of the table, and a detached
+/// view stays blank until the menu appears.
+- (UITargetedPreview *)linkPreviewForInteraction:(UIContextMenuInteraction *)interaction
+{
+  UIView *grid = interaction.view;
+  if (CGRectIsNull(_linkMenuFrame) || grid.window == nil)
     return nil;
+  if (_linkMenuPreview.superview != grid) {
+    CGRect frame = CGRectIntersection(CGRectInset(_linkMenuFrame, -4, -2), grid.bounds);
+    if (CGRectIsEmpty(frame))
+      return nil;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:frame.size];
+    UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+      CGContextTranslateCTM(context.CGContext, -frame.origin.x, -frame.origin.y);
+      [grid.layer renderInContext:context.CGContext];
+    }];
+    _linkMenuPreview = [[UIImageView alloc] initWithImage:image];
+    _linkMenuPreview.frame = frame;
+    [grid addSubview:_linkMenuPreview];
+  }
   UIPreviewParameters *parameters = [[UIPreviewParameters alloc] init];
-  parameters.visiblePath = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(_linkMenuFrame, -4, -2) cornerRadius:8];
-  return [[UITargetedPreview alloc] initWithView:interaction.view parameters:parameters];
+  parameters.visiblePath = [UIBezierPath bezierPathWithRoundedRect:_linkMenuPreview.bounds cornerRadius:8];
+  return [[UITargetedPreview alloc] initWithView:_linkMenuPreview parameters:parameters];
 }
 
 - (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
     previewForHighlightingMenuWithConfiguration:(UIContextMenuConfiguration *)configuration
 {
-  return [self linkPreviewForConfiguration:configuration interaction:interaction];
+  return [self linkPreviewForInteraction:interaction];
 }
 
 - (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
     previewForDismissingMenuWithConfiguration:(UIContextMenuConfiguration *)configuration
 {
-  return [self linkPreviewForConfiguration:configuration interaction:interaction];
+  return [self linkPreviewForInteraction:interaction];
+}
+
+- (void)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+       willEndForConfiguration:(UIContextMenuConfiguration *)configuration
+                      animator:(id<UIContextMenuInteractionAnimating>)animator
+{
+  UIImageView *preview = _linkMenuPreview;
+  if (!preview)
+    return;
+  __weak TableContainerView *weakSelf = self;
+  void (^cleanup)(void) = ^{
+    TableContainerView *strongSelf = weakSelf;
+    // A menu opened in the meantime has its own preview.
+    if (strongSelf && strongSelf->_linkMenuPreview == preview)
+      [strongSelf removeLinkMenuPreview];
+  };
+  if (animator)
+    [animator addCompletion:cleanup];
+  else
+    cleanup();
 }
 
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
@@ -577,8 +628,10 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
 {
   ENRMTableIOSLinkHit *link = [(ENRMTableIOSGridView *)_gridContainer linkAtPoint:location];
   UIMenu *linkMenu = [self.dynamicProps.linkContextMenus menuForURL:link.url title:link.title];
+  [self removeLinkMenuPreview];
+  // UIKit replaces a nil identifier with one of its own, so the frame tells the menus apart.
+  _linkMenuFrame = linkMenu ? link.frame : CGRectNull;
   if (linkMenu) {
-    _linkMenuFrame = link.frame;
     return [UIContextMenuConfiguration
         configurationWithIdentifier:link.url
                     previewProvider:nil
