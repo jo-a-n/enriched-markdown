@@ -19,4 +19,4 @@ Author handles and the New Contributors section are resolved through an authenti
 
 ## fetch-md4c.sh
 
-Syncs `packages/core/cpp/md4c` from upstream [mity/md4c](https://github.com/mity/md4c). Run via `yarn workspace react-native-enriched-markdown sync-md4c`.
+Syncs `packages/core/cpp/enrmrkd` from our MD4C fork [software-mansion-labs/md4c](https://github.com/software-mansion-labs/md4c), whose parser carries an `ENRMRKD_`/`enrmrkd_` prefix so it cannot clash with another embedded MD4C copy. Run via `yarn workspace react-native-enriched-markdown sync-md4c`.

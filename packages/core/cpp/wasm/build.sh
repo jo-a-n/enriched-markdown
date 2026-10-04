@@ -26,15 +26,15 @@ echo "Building md4c WASM…"
 emcc \
   -I "$CPP_ROOT" \
   -O2 \
-  -c "$CPP_ROOT/md4c/md4c.c" \
-  -o "$OUT_DIR/md4c.o"
+  -c "$CPP_ROOT/enrmrkd/enrmrkd.c" \
+  -o "$OUT_DIR/enrmrkd.o"
 
 # Compile C++ sources and link everything together
 emcc \
   "$SCRIPT_DIR/md4c_wasm.cpp" \
   "$SCRIPT_DIR/ASTSerializer.cpp" \
   "$CPP_ROOT/parser/MD4CParser.cpp" \
-  "$OUT_DIR/md4c.o" \
+  "$OUT_DIR/enrmrkd.o" \
   -I "$CPP_ROOT" \
   -I "$SCRIPT_DIR" \
   -O2 \
@@ -54,6 +54,6 @@ emcc \
   -s GROWABLE_ARRAYBUFFERS=0 \
   -o "$OUT_DIR/md4c.js"
 
-rm "$OUT_DIR/md4c.o"
+rm "$OUT_DIR/enrmrkd.o"
 
 echo "Done → $OUT_DIR/md4c.js"
