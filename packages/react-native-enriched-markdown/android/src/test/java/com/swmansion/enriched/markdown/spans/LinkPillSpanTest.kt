@@ -697,12 +697,17 @@ class LinkPillSpanTest {
         JavaOnlyArray.of(
           JavaOnlyMap.of("url", "https://example.com/a", "label", "A", "iconUri", ""),
           JavaOnlyMap.of("url", "https://example.com/b", "label", "", "iconUri", "pill_file"),
+          JavaOnlyMap.of("url", "user:c", "label", "", "iconUri", "", "iconTintColor", Color.BLUE.toDouble()),
+          JavaOnlyMap.of("url", "user:d", "label", "", "iconUri", "", "iconTintColor", 0.0),
         ),
       )
     assertEquals(
       mapOf(
         "https://example.com/a" to LinkPillContent("A", ""),
         "https://example.com/b" to LinkPillContent("", "pill_file"),
+        "user:c" to LinkPillContent(iconTintColor = Color.BLUE),
+        // A transparent tint is a tint; only a missing one means "not set".
+        "user:d" to LinkPillContent(iconTintColor = Color.TRANSPARENT),
       ),
       parsed,
     )
@@ -920,6 +925,41 @@ class LinkPillSpanTest {
       }
     } finally {
       file.delete()
+    }
+  }
+
+  @Test
+  fun variantTintLeavesPerLinkIconsAloneAndAPerLinkTintWins() {
+    val context = RuntimeEnvironment.getApplication()
+    val variantIcon = File.createTempFile("enriched-glyph", ".png")
+    val linkIcon = File.createTempFile("enriched-avatar", ".png")
+    try {
+      writeIcon(variantIcon)
+      writeIcon(linkIcon)
+      val variant =
+        pillStyle { copy(iconUri = variantIcon.toURI().toString(), iconTintColor = Color.BLUE, paddingHorizontal = 0f, borderWidth = 0f) }
+          // A black label, so only the icon can produce the colors checked below.
+          .copy(color = Color.BLACK, backgroundColor = Color.TRANSPARENT)
+
+      fun colorsWith(content: LinkPillContent?): Set<Int> {
+        val bitmap = Bitmap.createBitmap(120, 40, Bitmap.Config.ARGB_8888)
+        LinkPillSpan(variant, Typeface.DEFAULT, 16f, original, context, content)
+          .draw(Canvas(bitmap), original, 0, original.length, 0f, 0, 24, 40, paint)
+        return pixels(bitmap).filter { it == Color.RED || it == Color.GREEN || it == Color.BLUE || it == Color.MAGENTA }.toSet()
+      }
+
+      assertEquals("The variant's own icon takes the variant tint", setOf(Color.BLUE), colorsWith(null))
+      val avatar = linkIcon.toURI().toString()
+      assertEquals("A per-link icon keeps its colors", setOf(Color.RED, Color.GREEN), colorsWith(LinkPillContent(iconUri = avatar)))
+      assertEquals(setOf(Color.MAGENTA), colorsWith(LinkPillContent(iconUri = avatar, iconTintColor = Color.MAGENTA)))
+      assertEquals(
+        "A per-link tint without an icon recolors the variant's icon for that link",
+        setOf(Color.MAGENTA),
+        colorsWith(LinkPillContent(iconTintColor = Color.MAGENTA)),
+      )
+    } finally {
+      variantIcon.delete()
+      linkIcon.delete()
     }
   }
 

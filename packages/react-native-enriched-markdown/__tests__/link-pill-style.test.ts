@@ -214,3 +214,15 @@ it('ignores an invalid icon tint instead of making the icon transparent', () => 
   );
   warn.mockRestore();
 });
+
+it('passes a per-link icon tint and treats a tint change as a content change', () => {
+  const make = (iconTintColor?: string) =>
+    normalizeLinkPillContent({
+      'user:a': { iconUri: 'avatar_a', iconTintColor },
+    });
+  expect(make()![0]!.iconTintColor).toBeUndefined();
+  expect(make('#abcdef')![0]!.iconTintColor).toBe(normalizeColor('#abcdef'));
+  expect(isLinkPillContentEqual(make('#abcdef'), make('#abcdef'))).toBe(true);
+  expect(isLinkPillContentEqual(make('#abcdef'), make('#123456'))).toBe(false);
+  expect(isLinkPillContentEqual(make(), make('transparent'))).toBe(false);
+});

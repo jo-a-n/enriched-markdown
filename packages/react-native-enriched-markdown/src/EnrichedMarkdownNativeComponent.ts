@@ -321,6 +321,7 @@ export interface LinkPillContentInternal {
   url: string;
   label: string;
   iconUri: string;
+  iconTintColor?: ColorValue;
 }
 
 export interface SelectionMenuConfig {

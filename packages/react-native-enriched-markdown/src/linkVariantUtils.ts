@@ -1,5 +1,6 @@
 import type { LinkVariantStyle } from './types/MarkdownStyle';
 import type { LinkPillContent } from './types/MarkdownTextProps';
+import { normalizeColor } from './styleUtils';
 
 type LinkVariantEntry = [pattern: string, style: LinkVariantStyle];
 
@@ -71,10 +72,11 @@ export function normalizeLinkPillContent(
 ) {
   if (!content) return undefined;
   return Object.entries(content)
-    .map(([url, { label, iconUri }]) => ({
+    .map(([url, { label, iconUri, iconTintColor }]) => ({
       url,
       label: label ?? '',
       iconUri: iconUri ?? '',
+      iconTintColor: normalizeColor(iconTintColor),
     }))
     .sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
 }
@@ -93,7 +95,8 @@ export function isLinkPillContentEqual(
     return (
       entry.url === other.url &&
       entry.label === other.label &&
-      entry.iconUri === other.iconUri
+      entry.iconUri === other.iconUri &&
+      entry.iconTintColor === other.iconTintColor
     );
   });
 }

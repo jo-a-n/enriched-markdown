@@ -8,4 +8,6 @@ package com.swmansion.enriched.markdown.styles
 data class LinkPillContent(
   val label: String = "",
   val iconUri: String = "",
+  /** Tint for this link's icon; null means none was set for the link. */
+  val iconTintColor: Int? = null,
 )
