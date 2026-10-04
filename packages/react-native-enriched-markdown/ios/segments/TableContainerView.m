@@ -255,6 +255,8 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
   NSArray *_cachedAccessibilityElements;
 
   BOOL _imageRemeasurePending;
+  // Frame, in grid coordinates, of the link whose menu is being presented.
+  CGRect _linkMenuFrame;
 }
 
 - (instancetype)initWithConfig:(StyleConfig *)config
@@ -313,6 +315,8 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
     if (strongSelf && strongSelf.onLinkPress)
       strongSelf.onLinkPress(url);
   };
+  iosGridView.hasLinkContextMenu =
+      ^BOOL(NSString *url) { return [weakSelf.dynamicProps.linkContextMenus hasMenuForURL:url]; };
   iosGridView.onLinkLongTap = ^(NSString *url) {
     TableContainerView *strongSelf = weakSelf;
     if (strongSelf && strongSelf.onLinkLongPress)
@@ -545,9 +549,41 @@ static void ENRMTableComputeLayout(NSArray<NSArray<TableCellData *> *> *rows, NS
 }
 
 #if !TARGET_OS_OSX
+/// A link's menu lifts only the link; the table's own menu (nil identifier) lifts the whole grid.
+- (UITargetedPreview *)linkPreviewForConfiguration:(UIContextMenuConfiguration *)configuration
+                                       interaction:(UIContextMenuInteraction *)interaction
+{
+  if (configuration.identifier == nil || interaction.view.window == nil)
+    return nil;
+  UIPreviewParameters *parameters = [[UIPreviewParameters alloc] init];
+  parameters.visiblePath = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(_linkMenuFrame, -4, -2) cornerRadius:8];
+  return [[UITargetedPreview alloc] initWithView:interaction.view parameters:parameters];
+}
+
+- (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+    previewForHighlightingMenuWithConfiguration:(UIContextMenuConfiguration *)configuration
+{
+  return [self linkPreviewForConfiguration:configuration interaction:interaction];
+}
+
+- (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+    previewForDismissingMenuWithConfiguration:(UIContextMenuConfiguration *)configuration
+{
+  return [self linkPreviewForConfiguration:configuration interaction:interaction];
+}
+
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                         configurationForMenuAtLocation:(CGPoint)location
 {
+  ENRMTableIOSLinkHit *link = [(ENRMTableIOSGridView *)_gridContainer linkAtPoint:location];
+  UIMenu *linkMenu = [self.dynamicProps.linkContextMenus menuForURL:link.url title:link.title];
+  if (linkMenu) {
+    _linkMenuFrame = link.frame;
+    return [UIContextMenuConfiguration
+        configurationWithIdentifier:link.url
+                    previewProvider:nil
+                     actionProvider:^UIMenu *(NSArray<UIMenuElement *> *suggestedActions) { return linkMenu; }];
+  }
   if (!self.dynamicProps.enableBlockContextMenu) {
     return nil;
   }

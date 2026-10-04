@@ -3,9 +3,11 @@
 #import "ENRMCodeBlockContainerView.h"
 #import "ENRMFeatureFlags.h"
 #import "ENRMSegmentHeightMeasurer.h"
+#import "ENRMTableIOSGridView.h"
 #import "ENRMTextInteractionUtils.h"
 #import "ENRMTextRenderer.h"
 #import "EnrichedMarkdownInternalText.h"
+#import "LinkTapUtils.h"
 #import "MarkdownASTNode.h"
 #import "MarkdownASTSerializer.h"
 #import "PasteboardUtils.h"
@@ -110,6 +112,11 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
 @property (nonatomic, copy) NSString *cachedMarkdown;
 @property (nonatomic, copy) NSString *cachedPlainText;
 @end
+
+#if !TARGET_OS_OSX
+@interface ENRMBlockquoteContainerView () <UITextViewDelegate>
+@end
+#endif
 
 @implementation ENRMBlockquoteContainerView
 
@@ -319,6 +326,9 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
 {
   ENRMTapRecognizer *tap = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(handleTextTap:)];
   [view.textView addGestureRecognizer:tap];
+#if !TARGET_OS_OSX
+  view.textView.delegate = self;
+#endif
 }
 
 - (void)handleTextTap:(ENRMTapRecognizer *)recognizer
@@ -475,9 +485,30 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
 }
 
 #if !TARGET_OS_OSX
+- (UITextItemMenuConfiguration *)textView:(UITextView *)textView
+             menuConfigurationForTextItem:(UITextItem *)textItem
+                              defaultMenu:(UIMenu *)defaultMenu API_AVAILABLE(ios(17.0))
+{
+  return ENRMLinkMenuConfigurationForTextItem(textView, textItem, defaultMenu, self.dynamicProps.linkContextMenus,
+                                              self.dynamicProps.enableLinkPreview, self.onLinkLongPress);
+}
+
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                         configurationForMenuAtLocation:(CGPoint)location
 {
+  // Let the leaf interaction present a configured link menu, including nested tables.
+  UIView *hit = [interaction.view hitTest:location withEvent:nil];
+  while (hit && hit != interaction.view) {
+    CGPoint point = [interaction.view convertPoint:location toView:hit];
+    NSString *url = nil;
+    if ([hit isKindOfClass:[UITextView class]])
+      url = linkURLAtPoint((UITextView *)hit, point);
+    else if ([hit isKindOfClass:[ENRMTableIOSGridView class]])
+      url = [(ENRMTableIOSGridView *)hit linkAtPoint:point].url;
+    if ([self.dynamicProps.linkContextMenus hasMenuForURL:url])
+      return nil;
+    hit = hit.superview;
+  }
   if (!self.dynamicProps.enableBlockContextMenu) {
     return nil;
   }

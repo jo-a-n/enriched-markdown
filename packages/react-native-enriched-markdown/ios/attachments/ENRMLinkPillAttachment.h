@@ -14,6 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface ENRMLinkPillAttachment : NSTextAttachment
 @property (nonatomic, readonly) CGFloat boxHeight;
+/// The text the pill shows.
+@property (nonatomic, readonly) NSString *label;
 /// Visible label, followed by the original link text when they differ.
 @property (nonatomic, readonly) NSString *linkAccessibilityLabel;
 @property (nonatomic, readonly) NSAttributedString *originalText;

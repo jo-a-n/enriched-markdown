@@ -92,7 +92,6 @@ static CGFloat ENRMLinkPillLabelWidth(NSString *label, UIFont *font)
 }
 
 @implementation ENRMLinkPillAttachment {
-  NSString *_label;
   LinkVariantConfig *_variant;
   LinkPillConfig *_pill;
   UIFont *_font;
