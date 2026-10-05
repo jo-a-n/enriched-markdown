@@ -5,6 +5,7 @@ import com.swmansion.enriched.markdown.compose.patches.BlockquoteStylePatch
 import com.swmansion.enriched.markdown.compose.patches.CodeBlockStylePatch
 import com.swmansion.enriched.markdown.compose.patches.CodeStylePatch
 import com.swmansion.enriched.markdown.compose.patches.EmphasisStylePatch
+import com.swmansion.enriched.markdown.compose.patches.HighlightStylePatch
 import com.swmansion.enriched.markdown.compose.patches.ImageStylePatch
 import com.swmansion.enriched.markdown.compose.patches.InlineImageStylePatch
 import com.swmansion.enriched.markdown.compose.patches.LinkStylePatch
@@ -34,6 +35,7 @@ internal data class MarkdownStyleLayer(
   val emphasis: EmphasisStylePatch? = null,
   val strikethrough: StrikethroughStylePatch? = null,
   val underline: UnderlineStylePatch? = null,
+  val highlight: HighlightStylePatch? = null,
   val superscript: SuperscriptStylePatch? = null,
   val subscript: SubscriptStylePatch? = null,
   val code: CodeStylePatch? = null,
@@ -71,6 +73,7 @@ internal data class MarkdownStyleLayer(
           emphasisStyle = emphasis?.apply(base.emphasisStyle, resolveContext, units),
           strikethroughStyle = strikethrough?.apply(base.strikethroughStyle, units),
           underlineStyle = underline?.apply(base.underlineStyle, units),
+          highlightStyle = highlight?.apply(base.highlightStyle, units),
           superscriptStyle = superscript?.apply(base.superscriptStyle),
           subscriptStyle = subscript?.apply(base.subscriptStyle),
           codeStyle = code?.apply(base.codeStyle, resolveContext, units),
