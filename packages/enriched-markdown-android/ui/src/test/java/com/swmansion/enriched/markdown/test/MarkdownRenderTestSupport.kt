@@ -8,6 +8,7 @@ import com.swmansion.enriched.markdown.renderer.Renderer
 import com.swmansion.enriched.markdown.styles.BlockquoteStyle
 import com.swmansion.enriched.markdown.styles.CodeStyle
 import com.swmansion.enriched.markdown.styles.HeadingStyle
+import com.swmansion.enriched.markdown.styles.HighlightStyle
 import com.swmansion.enriched.markdown.styles.LinkStyle
 import com.swmansion.enriched.markdown.styles.ParagraphStyle
 import com.swmansion.enriched.markdown.styles.SpoilerStyle
@@ -43,6 +44,9 @@ object MarkdownRenderTestSupport {
       strikethroughStyle = StrikethroughStyle(color = strikethroughColor),
       underlineStyle = UnderlineStyle(color = underlineColor),
     )
+
+  /** [defaultStyle] with only its [HighlightStyle] replaced. */
+  fun styleWithHighlight(highlightStyle: HighlightStyle): StyleConfig = copyOfDefault(highlightStyle = highlightStyle)
 
   /** [defaultStyle] with only its [BlockquoteStyle] replaced. */
   fun styleWithBlockquote(blockquoteStyle: BlockquoteStyle): StyleConfig = copyOfDefault(blockquoteStyle = blockquoteStyle)
@@ -81,6 +85,7 @@ object MarkdownRenderTestSupport {
   private fun copyOfDefault(
     strikethroughStyle: StrikethroughStyle? = null,
     underlineStyle: UnderlineStyle? = null,
+    highlightStyle: HighlightStyle? = null,
     taskListStyle: TaskListStyle? = null,
     blockquoteStyle: BlockquoteStyle? = null,
     codeStyle: CodeStyle? = null,
@@ -99,6 +104,7 @@ object MarkdownRenderTestSupport {
       emphasisStyle = base.emphasisStyle,
       strikethroughStyle = strikethroughStyle ?: base.strikethroughStyle,
       underlineStyle = underlineStyle ?: base.underlineStyle,
+      highlightStyle = highlightStyle ?: base.highlightStyle,
       superscriptStyle = base.superscriptStyle,
       subscriptStyle = base.subscriptStyle,
       codeStyle = codeStyle ?: base.codeStyle,

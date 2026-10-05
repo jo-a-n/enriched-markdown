@@ -7,7 +7,6 @@ import android.graphics.RectF
 import android.text.Layout
 import android.text.Spanned
 import android.text.TextPaint
-import android.text.style.LeadingMarginSpan
 import android.text.style.LineBackgroundSpan
 import android.widget.TextView
 import com.swmansion.enriched.markdown.spoiler.colorWithAlpha
@@ -88,7 +87,7 @@ class CodeBackgroundSpan(
     val layout = textViewRef?.get()?.layout?.takeIf { it.text === text }
     val startX =
       when {
-        !isFirst -> left.toFloat() + leadingMarginAt(text, start)
+        !isFirst -> left.toFloat() + InlineBackgroundGeometry.leadingMarginAt(text, start)
         layout != null -> layout.horizontalOnLine(spanStart, lineNum)
         else -> left + measuredOffset(text, start, spanStart, p)
       }
@@ -141,7 +140,7 @@ class CodeBackgroundSpan(
     index: Int,
     paint: Paint,
   ): Float {
-    val leadingMargin = leadingMarginAt(text, lineStart).toFloat()
+    val leadingMargin = InlineBackgroundGeometry.leadingMarginAt(text, lineStart).toFloat()
     if (index <= lineStart) return leadingMargin
     val textPaint = paint as? TextPaint ?: TextPaint(paint)
     return leadingMargin + Layout.getDesiredWidth(text, lineStart, index, textPaint)
@@ -224,19 +223,6 @@ class CodeBackgroundSpan(
     else -> {
       floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
     }
-  }
-
-  private fun leadingMarginAt(
-    text: Spanned,
-    lineStart: Int,
-  ): Int {
-    if (lineStart >= text.length) return 0
-    val spans = text.getSpans(lineStart, lineStart + 1, LeadingMarginSpan::class.java)
-    var margin = 0
-    for (span in spans) {
-      margin += span.getLeadingMargin(false)
-    }
-    return margin
   }
 
   private fun adjustBottomForMargin(
