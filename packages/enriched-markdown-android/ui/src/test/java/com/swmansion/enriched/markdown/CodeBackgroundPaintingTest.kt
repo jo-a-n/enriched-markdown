@@ -193,4 +193,18 @@ class CodeBackgroundPaintingTest {
       draw(document(paragraph(text("call "), code("render()"), text(" once"))), textView = TextView(context)),
     )
   }
+
+  @Test
+  fun aViewThatDidNotRegisterStillFollowsTheListIndent() {
+    assertCoversTheCode(
+      draw(document(unorderedList(listItem(paragraph(text("call "), code("render()"))))), textView = TextView(context)),
+    )
+  }
+
+  @Test
+  fun aViewThatDidNotRegisterStillEndsIndentedCodeThatStartsTheLine() {
+    assertCoversTheCode(
+      draw(document(unorderedList(listItem(paragraph(code("render()"), text(" once"))))), textView = TextView(context)),
+    )
+  }
 }

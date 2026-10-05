@@ -140,10 +140,10 @@ class CodeBackgroundSpan(
     index: Int,
     paint: Paint,
   ): Float {
-    val leadingMargin = InlineBackgroundGeometry.leadingMarginAt(text, lineStart).toFloat()
-    if (index <= lineStart) return leadingMargin
+    if (index <= lineStart) return InlineBackgroundGeometry.leadingMarginAt(text, lineStart).toFloat()
     val textPaint = paint as? TextPaint ?: TextPaint(paint)
-    return leadingMargin + Layout.getDesiredWidth(text, lineStart, index, textPaint)
+    // getDesiredWidth already adds the paragraph's leading margin.
+    return Layout.getDesiredWidth(text, lineStart, index, textPaint)
   }
 
   private fun drawShapes(
