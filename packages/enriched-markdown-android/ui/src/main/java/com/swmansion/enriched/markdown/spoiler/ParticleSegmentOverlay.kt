@@ -30,8 +30,8 @@ internal class ParticleSegmentOverlay(
   private var accumulatedPrimaryBirths = 0f
   private var accumulatedSecondaryBirths = 0f
 
-  private val densityFactor = particleDensity / SpoilerOverlay.Particles.DEFAULT_DENSITY
-  private val speedFactor = particleSpeed / SpoilerOverlay.Particles.DEFAULT_SPEED
+  private val densityFactor = particleDensity / DEFAULT_PARTICLE_DENSITY
+  private val speedFactor = particleSpeed / DEFAULT_PARTICLE_SPEED
 
   private var isBursting = false
   private var lastFrameTime = NO_FRAME

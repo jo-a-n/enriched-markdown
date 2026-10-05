@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.swmansion.enriched.markdown.compose.DrawScopeSpoilerSegmentOverlay
+import com.swmansion.enriched.markdown.compose.invoke
 import com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlayHost
@@ -32,7 +33,7 @@ enum class PlaygroundSpoilerOverlay(
 ) {
   Particles("Particles", SpoilerOverlay.Particles()),
   DenseParticles("Dense particles", SpoilerOverlay.Particles(density = 20f, speed = 45f)),
-  Solid("Solid", SpoilerOverlay.Solid(cornerRadius = 6f)),
+  Solid("Solid", SpoilerOverlay.Solid(cornerRadius = 6.dp)),
   Shimmer("Shimmer", ShimmerSpoiler()),
   Pixelated("Pixelated", PixelatedSpoiler()),
   ;
@@ -63,7 +64,7 @@ fun spoilerSampleMarkdown(inlineImageUri: String): String =
 data class ShimmerSpoiler(
   val periodMillis: Long = 1_500,
 ) : CustomSpoilerOverlay {
-  override fun createSegment(
+  override fun createSegmentOverlay(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
   ) = ShimmerSegment(host, Color(style.color), periodMillis)
@@ -113,7 +114,7 @@ class ShimmerSegment(
 data class PixelatedSpoiler(
   val blockSize: Float = 6f, // dp
 ) : CustomSpoilerOverlay {
-  override fun createSegment(
+  override fun createSegmentOverlay(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
   ) = PixelatedSegment(blockSize * host.density, style.color)

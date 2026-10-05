@@ -69,8 +69,8 @@ class SpoilerSegment internal constructor(
   /**
    * Draws the segment's text as it looks once revealed, each glyph where the text view draws it,
    * for effects that show the text through (a blur, pixelation). It lays out the whole line each
-   * time, so cache the result until [width] or [height] changes. New content under the segment, such
-   * as an image loading, comes with a new overlay.
+   * time, so cache the result until [width] or [height] changes. New content under the segment,
+   * such as an image loading, comes with a new overlay.
    */
   fun drawText(canvas: Canvas) {
     val layout = layout ?: return

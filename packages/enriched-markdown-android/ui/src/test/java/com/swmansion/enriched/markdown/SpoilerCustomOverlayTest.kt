@@ -65,7 +65,7 @@ class SpoilerCustomOverlayTest {
     val probe: Probe,
     val drawsText: Boolean = false,
   ) : CustomSpoilerOverlay {
-    override fun createSegment(
+    override fun createSegmentOverlay(
       host: SpoilerOverlayHost,
       style: SpoilerStyle,
     ): SpoilerSegmentOverlay = ProbeSegment(style, drawsText).also { probe.created.add(it) }
@@ -75,7 +75,7 @@ class SpoilerCustomOverlayTest {
     val probe: Probe,
     override val revealDurationMillis: Long,
   ) : CustomSpoilerOverlay {
-    override fun createSegment(
+    override fun createSegmentOverlay(
       host: SpoilerOverlayHost,
       style: SpoilerStyle,
     ): SpoilerSegmentOverlay = ProbeSegment(style, drawsText = false).also { probe.created.add(it) }

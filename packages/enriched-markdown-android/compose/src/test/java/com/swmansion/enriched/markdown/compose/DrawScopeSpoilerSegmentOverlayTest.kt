@@ -64,7 +64,7 @@ class DrawScopeSpoilerSegmentOverlayTest {
     val drawing: Drawing = Drawing.FILL,
     val customReveal: Boolean = false,
   ) : CustomSpoilerOverlay {
-    override fun createSegment(
+    override fun createSegmentOverlay(
       host: SpoilerOverlayHost,
       style: SpoilerStyle,
     ) = ProbeSegment(host, drawing, customReveal).also { probe.created.add(it) }

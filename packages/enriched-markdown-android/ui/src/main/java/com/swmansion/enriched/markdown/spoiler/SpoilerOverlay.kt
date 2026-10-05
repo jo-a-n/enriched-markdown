@@ -14,26 +14,21 @@ sealed interface SpoilerOverlay {
    * @property speed how fast the particles drift; their velocity scales linearly.
    */
   data class Particles(
-    val density: Float = DEFAULT_DENSITY,
-    val speed: Float = DEFAULT_SPEED,
-  ) : SpoilerOverlay {
-    internal companion object {
-      const val DEFAULT_DENSITY = 8f
-      const val DEFAULT_SPEED = 20f
-    }
-  }
+    val density: Float = DEFAULT_PARTICLE_DENSITY,
+    val speed: Float = DEFAULT_PARTICLE_SPEED,
+  ) : SpoilerOverlay
 
   /**
    * A solid rounded box in the style's color.
    *
-   * @property cornerRadius in dp.
+   * @property cornerRadius in dp. Compose code can pass a `Dp` instead, through the compose
+   * module's `SpoilerOverlay.Solid(cornerRadius: Dp)`.
    */
   data class Solid(
-    val cornerRadius: Float = DEFAULT_CORNER_RADIUS,
+    val cornerRadius: Float = DEFAULT_SOLID_CORNER_RADIUS,
   ) : SpoilerOverlay {
-    internal companion object {
-      const val DEFAULT_CORNER_RADIUS = 4f
-    }
+    /** Lets other modules add factories, such as the compose module's one taking a `Dp`. */
+    companion object
   }
 }
 
@@ -51,7 +46,7 @@ interface CustomSpoilerOverlay : SpoilerOverlay {
    * after the text reflows, an image under the spoiler loads, or the overlay or style changes.
    * Keep it cheap.
    */
-  fun createSegment(
+  fun createSegmentOverlay(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
   ): SpoilerSegmentOverlay
@@ -89,6 +84,9 @@ internal fun SpoilerOverlay.createSegmentOverlay(
 ): SpoilerSegmentOverlay =
   when (this) {
     is SpoilerOverlay.Particles -> ParticleSegmentOverlay(style.color, density, speed)
+
     is SpoilerOverlay.Solid -> SolidSegmentOverlay(style.color, cornerRadius * host.density)
-    is CustomSpoilerOverlay -> createSegment(host, style)
+
+    // The member, which wins over this extension.
+    is CustomSpoilerOverlay -> createSegmentOverlay(host, style)
   }

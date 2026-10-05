@@ -21,7 +21,7 @@ import com.swmansion.enriched.markdown.styles.SpoilerStyle
 data class ShimmerSpoiler(
   val periodMillis: Long = 1_500,
 ) : CustomSpoilerOverlay {
-  override fun createSegment(
+  override fun createSegmentOverlay(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
   ) = ShimmerSegment(host, Color(style.color), periodMillis)

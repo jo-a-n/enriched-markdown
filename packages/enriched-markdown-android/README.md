@@ -239,13 +239,15 @@ package com.swmansion.enriched.markdown.spoiler
 
 sealed interface SpoilerOverlay {
   data class Particles(val density: Float = 8f, val speed: Float = 20f) : SpoilerOverlay
-  data class Solid(val cornerRadius: Float = 4f) : SpoilerOverlay   // dp
+  data class Solid(val cornerRadius: Float = 4f) : SpoilerOverlay   // dp; Compose can pass a Dp
 }
 ```
 
 The two built-in overlays take their colors from the `spoiler { }` style and their tuning from
 their own parameters. `density` and `speed` scale the particle field linearly from its defaults, so
-`density = 16f` puts in twice as many particles. `cornerRadius` is in dp.
+`density = 16f` puts in twice as many particles. `cornerRadius` is in dp; in Compose, pass a `Dp`
+instead, as `SpoilerOverlay.Solid(cornerRadius = 6.dp)`, with
+`import com.swmansion.enriched.markdown.compose.invoke`.
 
 ```kotlin
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
@@ -263,7 +265,7 @@ Any effect can stand in for the built-ins. Implement `CustomSpoilerOverlay` to b
 
 ```kotlin
 interface CustomSpoilerOverlay : SpoilerOverlay {
-  fun createSegment(host: SpoilerOverlayHost, style: SpoilerStyle): SpoilerSegmentOverlay
+  fun createSegmentOverlay(host: SpoilerOverlayHost, style: SpoilerStyle): SpoilerSegmentOverlay
   val revealDurationMillis: Long  // default: 450
 }
 
@@ -298,12 +300,12 @@ This one pixelates the hidden words:
 
 ```kotlin
 data class PixelatedSpoiler(val blockSize: Float = 6f) : CustomSpoilerOverlay {
-  override fun createSegment(host: SpoilerOverlayHost, style: SpoilerStyle) =
+  override fun createSegmentOverlay(host: SpoilerOverlayHost, style: SpoilerStyle) =
     PixelatedSegment(blockSize * host.density)
 }
 
 class PixelatedSegment(private val blockSize: Float) : SpoilerSegmentOverlay() {
-  // Paint filters bitmaps by default since Android 9; turn it off so the blocks keep hard edges.
+  // Paint filters bitmaps by default since Android 10; turn it off so the blocks keep hard edges.
   private val paint = Paint().apply { isFilterBitmap = false }
   private val bounds = RectF()
   private var pixels: Bitmap? = null
@@ -335,8 +337,8 @@ EnrichedMarkdownText(markdown = content, spoilerOverlay = PixelatedSpoiler())
 A spoiler gets one segment overlay per line. The view creates it when the segment comes into view
 and removes it when the spoiler is revealed, when the text reflows onto different lines, when an
 image under the spoiler finishes loading, or when the overlay or the style changes, so keep
-`createSegment` cheap. The canvas is moved to the segment's
-top-left corner and clipped to its size. The view rebuilds its overlays only when the new
+`createSegmentOverlay` cheap. The canvas is moved to the segment's top-left corner and clipped to
+its size. The view rebuilds its overlays only when the new
 `spoilerOverlay` is not `==` to the old one, so make custom overlays data classes or objects, or
 `remember` them: a plain class created in every recomposition restarts every overlay each time.
 
@@ -382,7 +384,7 @@ rounded box, and wipes the box away in reading order when revealed:
 
 ```kotlin
 data class ShimmerSpoiler(val periodMillis: Long = 1_500) : CustomSpoilerOverlay {
-  override fun createSegment(host: SpoilerOverlayHost, style: SpoilerStyle) =
+  override fun createSegmentOverlay(host: SpoilerOverlayHost, style: SpoilerStyle) =
     ShimmerSegment(host, Color(style.color), periodMillis)
 }
 
@@ -427,8 +429,8 @@ EnrichedMarkdownText(markdown = content, spoilerOverlay = ShimmerSpoiler())
 To keep the fade and add to it, call `drawFadingOut(segment, progress)` from `drawReveal`. To show
 the text through, `drawSegmentText(segment)` draws the glyphs into the scope, under its current transform.
 
-`createSegment` runs outside composition, so an overlay that needs a value from the composition,
-such as a theme color, takes it as a property, the way `ShimmerSpoiler` takes `periodMillis`, and is
+`createSegmentOverlay` runs outside composition, so an overlay that needs a value from the
+composition, such as a theme color, takes it as a property, the way `ShimmerSpoiler` takes `periodMillis`, and is
 created with it in the composable. Since `EnrichedMarkdownText` rebuilds the overlays whenever `spoilerOverlay` is not `==` to the last
 one, keep such overlays data classes or objects, so each recomposition passes an equal value, or
 `remember` the instance. Don't build one from a lambda created during composition: two lambdas are

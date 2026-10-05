@@ -15,8 +15,8 @@ import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 
 /**
  * A [SpoilerSegmentOverlay] drawn with Compose; return instances from
- * [CustomSpoilerOverlay.createSegment]. Each call gets a [DrawScope] clipped to the segment, with
- * the host's [Density] and a [LayoutDirection] that follows [SpoilerSegment.isRtl].
+ * [CustomSpoilerOverlay.createSegmentOverlay]. Each call gets a [DrawScope] clipped to the segment,
+ * with the host's [Density] and a [LayoutDirection] that follows [SpoilerSegment.isRtl].
  */
 abstract class DrawScopeSpoilerSegmentOverlay(
   private val host: SpoilerOverlayHost,

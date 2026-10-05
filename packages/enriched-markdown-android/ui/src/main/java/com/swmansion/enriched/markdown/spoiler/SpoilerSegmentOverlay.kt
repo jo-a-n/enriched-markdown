@@ -5,8 +5,8 @@ import kotlin.math.roundToInt
 
 /**
  * Draws the effect over one line segment of a concealed spoiler; return instances from
- * [CustomSpoilerOverlay.createSegment]. The canvas is moved to the segment's top-left corner and
- * clipped to its size, and the text under it is already transparent, so no backdrop is needed.
+ * [CustomSpoilerOverlay.createSegmentOverlay]. The canvas is moved to the segment's top-left corner
+ * and clipped to its size, and the text under it is already transparent, so no backdrop is needed.
  * All calls come on the main thread.
  */
 abstract class SpoilerSegmentOverlay {
