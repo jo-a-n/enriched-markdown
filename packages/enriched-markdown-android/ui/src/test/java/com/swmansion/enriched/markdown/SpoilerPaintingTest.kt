@@ -16,6 +16,7 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+import com.swmansion.enriched.markdown.spans.ImageSpan
 import com.swmansion.enriched.markdown.spans.SpoilerSpan
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlayDrawer
@@ -352,6 +353,40 @@ class SpoilerPaintingTest {
 
     test.spans.single().markRevealed()
     assertTrue(test.drawText().bitmap.redPixels() > 0)
+  }
+
+  @Test
+  fun aSegmentOverABlockImageCoversTheWholeImage() {
+    val url = "test://spoiler-block-image"
+    ImageCache.putOriginal(url, Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) })
+    val style = styleWithOverlayColor()
+    val rendered = render(document(paragraph(spoiler(image(url)))), style)
+    // A block image takes its width from the view it is registered with, as the segment views do,
+    // so the text is laid out again once it has one.
+    rendered
+      .getSpans(0, rendered.length, ImageSpan::class.java)
+      .single()
+      .registerTextView(laidOutTextView(rendered, style))
+    val textView = laidOutTextView(rendered, style)
+    val drawer = requireNotNull(SpoilerOverlayDrawer.setupIfNeeded(textView, rendered, null, SpoilerOverlay.Solid()))
+    val test = Harness(textView, drawer, rendered)
+    val imageHeight = style.imageStyle.height
+    val textMetrics = test.textView.paint.fontMetrics
+    assertTrue(
+      "The image must be taller than a line of text for this to be meaningful",
+      imageHeight > textMetrics.descent - textMetrics.ascent,
+    )
+
+    val rect =
+      test
+        .draw()
+        .roundRects
+        .single()
+        .first
+
+    val lineTop = requireNotNull(test.textView.layout).getLineTop(0) + test.textView.totalPaddingTop
+    assertEquals(lineTop.toFloat(), rect.top, 1f)
+    assertEquals(imageHeight, rect.height(), 1f)
   }
 
   private fun Bitmap.inkedPixels(): Int = pixels().count { Color.alpha(it) > 0 }
