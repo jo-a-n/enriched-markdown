@@ -25,7 +25,6 @@ data class RendererConfig(
 class RendererFactory(
   private val config: RendererConfig,
   val context: Context,
-  private val onImageSpanCreated: (ImageSpan) -> Unit,
 ) {
   val blockStyleContext = BlockStyleContext()
   val styleCache = SpanStyleCache(config.style, context)
@@ -106,10 +105,6 @@ class RendererFactory(
       put(MarkdownASTNode.NodeType.Subscript, SubscriptRenderer())
       put(MarkdownASTNode.NodeType.Spoiler, SpoilerRenderer())
     }
-  }
-
-  fun registerImageSpan(span: ImageSpan) {
-    onImageSpanCreated(span)
   }
 
   fun getRenderer(node: MarkdownASTNode): NodeRenderer =
