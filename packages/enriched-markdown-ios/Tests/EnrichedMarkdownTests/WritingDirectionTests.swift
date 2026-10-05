@@ -18,20 +18,25 @@ final class WritingDirectionTests: XCTestCase {
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "مرحبا بالعالم"), .rightToLeft)
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "שלום עולם"), .rightToLeft)
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "سلام دنیا"), .rightToLeft)
-        // Adlam and Old Hungarian, beyond the Basic Multilingual Plane.
-        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{1E900}\u{1E901}"), .rightToLeft)
-        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{10C80}\u{10C81}"), .rightToLeft)
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{1E900}\u{1E901}"), .rightToLeft, "Adlam")
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{10C80}\u{10C81}"), .rightToLeft, "Old Hungarian")
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{10900}\u{10901}"), .rightToLeft, "Phoenician")
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{1EE00}\u{1EE01}"), .rightToLeft, "Arabic mathematical alphabet")
     }
 
     func testFirstStrongDetectsLeftToRightScripts() {
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "Hello"), .leftToRight)
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "こんにちは"), .leftToRight)
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{10400}\u{10401}"), .leftToRight, "Deseret")
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{11005}\u{11006}"), .leftToRight, "Brahmi")
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{1E7E0}\u{1E7E1}"), .leftToRight, "Ethiopic Extended-B")
     }
 
     func testFirstStrongSkipsLeadingNeutralCharacters() {
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "123 مرحبا"), .rightToLeft)
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "(\"Hello\") مرحبا"), .leftToRight)
         XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "😀 سلام"), .rightToLeft)
+        XCTAssertEqual(WritingDirectionResolver.firstStrongDirection(of: "\u{2764}\u{FE0F} مرحبا"), .rightToLeft, "emoji variation selector")
     }
 
     func testFirstStrongHonorsDirectionalMarks() {
@@ -47,7 +52,7 @@ final class WritingDirectionTests: XCTestCase {
     // MARK: - Rendered paragraphs
 
     func testParagraphsResolveFromTheirOwnContent() {
-        // Emoji: non-letters, two UTF-16 units each. Adlam: beyond the BMP.
+        // Emoji: non-letters, two UTF-16 units each.
         let rendered = render("😀 Hello\n\n🙂🙂 مرحبا\n\nשלום\n\n\u{200F}123\n\n\u{1E900}\u{1E901}")
 
         XCTAssertEqual(direction(of: "Hello", in: rendered), .leftToRight)
@@ -91,8 +96,6 @@ final class WritingDirectionTests: XCTestCase {
         XCTAssertEqual(direction(of: "World", in: rendered), .leftToRight)
     }
 
-    /// Left `.natural`, TextKit would keep the marker column on the left and
-    /// lay the text flush against the trailing edge.
     func testRightToLeftItemKeepsItsMarkerColumnOnTheTrailingSide() throws {
         let textView = laidOutTextView(showing: render("- مرحبا بالعالم"), width: 320, config: config)
         let textLayoutManager = try XCTUnwrap(textView.textLayoutManager)
