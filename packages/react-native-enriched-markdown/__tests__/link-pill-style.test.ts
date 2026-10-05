@@ -26,6 +26,7 @@ it('requires an explicit pill opt-in and preserves ordinary link overrides', () 
       borderRadius: 8,
       paddingHorizontal: 6,
       paddingVertical: 2,
+      lineHeight: 0,
       borderWidth: 0,
       borderColor: normalizeColor('transparent'),
       maxWidth: 0,

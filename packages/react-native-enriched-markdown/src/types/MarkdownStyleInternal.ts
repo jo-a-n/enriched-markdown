@@ -120,6 +120,7 @@ export interface LinkPillInternal {
   borderRadius: number;
   paddingHorizontal: number;
   paddingVertical: number;
+  lineHeight: number;
   borderWidth: number;
   borderColor: string;
   maxWidth: number;

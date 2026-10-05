@@ -566,6 +566,7 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
             newVariant.pill.borderRadius != oldVariant.pill.borderRadius ||
             newVariant.pill.paddingHorizontal != oldVariant.pill.paddingHorizontal ||
             newVariant.pill.paddingVertical != oldVariant.pill.paddingVertical ||
+            newVariant.pill.lineHeight != oldVariant.pill.lineHeight ||
             newVariant.pill.borderWidth != oldVariant.pill.borderWidth ||
             newVariant.pill.borderColor != oldVariant.pill.borderColor ||
             newVariant.pill.maxWidth != oldVariant.pill.maxWidth) {
@@ -589,6 +590,7 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
           pill.borderRadius = entry.pill.borderRadius;
           pill.paddingHorizontal = entry.pill.paddingHorizontal;
           pill.paddingVertical = entry.pill.paddingVertical;
+          pill.lineHeight = entry.pill.lineHeight;
           pill.borderWidth = entry.pill.borderWidth;
           pill.borderColor = RCTUIColorFromSharedColor(entry.pill.borderColor);
           pill.maxWidth = entry.pill.maxWidth;

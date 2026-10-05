@@ -79,6 +79,9 @@ class LinkPillSpan(
 
   val accessibilityText = if (label == originalLinkText) originalLinkText else "$label, $originalLinkText"
 
+  /** The minimum line height the pill asks of the block that holds it; 0 for none. */
+  val lineHeight: Float = pill.lineHeight
+
   init {
     val iconUri = content?.iconUri?.ifEmpty { null } ?: pill.iconUri
     if (LinkPillIconCache.isRemote(iconUri)) {

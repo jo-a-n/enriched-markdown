@@ -319,6 +319,14 @@ static inline NSString *normalizedFontWeight(NSString *fontWeight)
   return _allowFontScaling ? RCTFontSizeMultiplier() : 1.0;
 }
 
+- (CGFloat)lineHeightForLinkPill:(LinkPillConfig *)pill
+{
+  if (_allowFontScaling && pill.lineHeight > 0) {
+    return pill.lineHeight * RCTFontSizeMultiplierWithMax(_maxFontSizeMultiplier);
+  }
+  return pill.lineHeight;
+}
+
 - (void)setFontScaleMultiplier:(CGFloat)newValue
 {
   BOOL newAllowFontScaling = (newValue != 1.0);

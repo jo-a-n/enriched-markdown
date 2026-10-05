@@ -126,11 +126,16 @@ const markdownStyle = {
 | `pill.borderRadius`      | `8`                | Corner radius in points/DIP.                                          |
 | `pill.paddingHorizontal` | `6`                | Horizontal inset in points/DIP.                                       |
 | `pill.paddingVertical`   | `2`                | Vertical inset in points/DIP.                                         |
+| `pill.lineHeight`        | Not set            | Minimum line height of a block that holds the pill. See below.        |
 | `pill.borderWidth`       | `0`                | Border width in points/DIP.                                           |
 | `pill.borderColor`       | Transparent        | Border color.                                                         |
 | `pill.maxWidth`          | `0`                | Positive maximum width in points/DIP. Zero uses available text width. |
 
 Nonfinite dimensions use defaults and negative dimensions clamp to zero.
+
+A pill is as tall as its font's line plus `paddingVertical` and `borderWidth` on both sides. A line grows to fit a pill, but only to the pill's own height, so pills on consecutive lines touch when the line height leaves no room. `pill.lineHeight` is for that case: a paragraph, list item, heading or quote that holds the pill gets lines at least that tall, on every line, so its spacing stays even. It only ever raises the block's own `lineHeight`, it does not size the pill, and blocks without pills are unaffected.
+
+For text that streams in, set the block's own `lineHeight` to that value instead. With `pill.lineHeight` a paragraph's line height depends on whether it holds a pill, so while streaming it changes the moment a link completes and becomes one, and the text around it moves. A block `lineHeight` is the same before and after, so nothing moves.
 
 ### Per-link content: `linkPillContent`
 

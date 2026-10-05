@@ -37,6 +37,7 @@ static NSRange ENRMCollapseLinkIntoPill(NSMutableAttributedString *output, NSRan
                    iconUri:content.iconUri.length > 0 ? content.iconUri : variant.pill.iconUri
                       font:attributes[NSFontAttributeName] ?: [context getBlockStyle].cachedFont
             requestHeaders:[config imageRequestHeaders]];
+  pill.lineHeight = [config lineHeightForLinkPill:variant.pill];
 
   // The placeholder keeps the block context of the text it replaces. The pill draws its own
   // background, underline and label, so inline decoration of that text must not show around it.
