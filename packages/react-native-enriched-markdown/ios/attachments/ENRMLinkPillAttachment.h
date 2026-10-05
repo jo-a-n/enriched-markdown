@@ -14,6 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface ENRMLinkPillAttachment : NSTextAttachment
 @property (nonatomic, readonly) CGFloat boxHeight;
+/// The minimum line height the pill asks of the block that holds it (`pill.lineHeight`); 0 for none.
+@property (nonatomic, assign) CGFloat lineHeight;
 /// The text the pill shows.
 @property (nonatomic, readonly) NSString *label;
 /// Visible label, followed by the original link text when they differ.

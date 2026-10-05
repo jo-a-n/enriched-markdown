@@ -99,6 +99,7 @@ interface LinkPillInternal {
   borderRadius: CodegenTypes.Float;
   paddingHorizontal: CodegenTypes.Float;
   paddingVertical: CodegenTypes.Float;
+  lineHeight: CodegenTypes.Float;
   borderWidth: CodegenTypes.Float;
   borderColor: ColorValue;
   maxWidth: CodegenTypes.Float;

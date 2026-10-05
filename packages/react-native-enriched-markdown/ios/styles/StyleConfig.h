@@ -12,6 +12,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) CGFloat borderRadius;
 @property (nonatomic, assign) CGFloat paddingHorizontal;
 @property (nonatomic, assign) CGFloat paddingVertical;
+/// Minimum line height of a block that holds the pill; 0 when unset.
+@property (nonatomic, assign) CGFloat lineHeight;
 @property (nonatomic, assign) CGFloat borderWidth;
 @property (nonatomic, strong) RCTUIColor *borderColor;
 @property (nonatomic, assign) CGFloat maxWidth;
@@ -43,6 +45,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface StyleConfig : NSObject <NSCopying>
 - (instancetype)init;
 - (CGFloat)fontScaleMultiplier;
+/// `pill.lineHeight`, scaled with the font like the blocks' own line heights.
+- (CGFloat)lineHeightForLinkPill:(LinkPillConfig *)pill;
 - (void)setFontScaleMultiplier:(CGFloat)newValue;
 - (CGFloat)maxFontSizeMultiplier;
 - (void)setMaxFontSizeMultiplier:(CGFloat)newValue;

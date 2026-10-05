@@ -82,6 +82,9 @@ class LinkPillSpan(
 
   val accessibilityText = if (label == originalLinkText) originalLinkText else "$label, $originalLinkText"
 
+  /** The minimum line height the pill asks of the block that holds it; 0 for none. */
+  val lineHeight: Float = pill.lineHeight
+
   // A tint set for the link wins. The variant's tint is for the variant's own icon, not
   // for an icon supplied per link (an avatar would become a silhouette).
   private val iconTint: ColorFilter? =
