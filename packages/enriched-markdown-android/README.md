@@ -349,7 +349,9 @@ in the overlay's fields, and move or restyle them per frame instead of creating 
 overridden) and calls `drawReveal` each frame with `progress` rising from 0 towards 1, fading the
 text in underneath on the same clock. The default draws `draw()` fading out; override it to shape
 the reveal (a burst, a wipe), and call `super` to keep the fade. Every segment of a spoiler reveals
-at once; for a line-by-line effect, stagger by `segment.index`.
+at once; for a line-by-line effect, stagger by `segment.index`. The duration follows the system's
+animator duration scale, like any `ValueAnimator`: a scale of 2× doubles it, and with animations
+turned off a reveal completes at once.
 
 **Showing the text through.** `drawText` draws the segment's text as it looks once revealed, each
 glyph where the text view draws it, so a blur, pixelation or scramble lines up with the real text as

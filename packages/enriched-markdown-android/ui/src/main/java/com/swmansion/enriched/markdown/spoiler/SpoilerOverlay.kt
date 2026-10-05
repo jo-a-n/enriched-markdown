@@ -58,8 +58,9 @@ interface CustomSpoilerOverlay : SpoilerOverlay {
 
   /**
    * How long a reveal takes, in milliseconds: [SpoilerSegmentOverlay.drawReveal]'s progress and
-   * the text fading in underneath both run over it. Zero or less reveals at once, without calling
-   * `drawReveal`.
+   * the text fading in underneath both run over it, scaled by the system's animator duration scale
+   * as a `ValueAnimator` would be. Zero or less, or animations turned off, reveals at once without
+   * calling `drawReveal`.
    */
   val revealDurationMillis: Long get() = REVEAL_DURATION_MS
 }

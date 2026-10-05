@@ -1,5 +1,6 @@
 package com.swmansion.enriched.markdown
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -8,6 +9,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.provider.Settings
 import android.text.Spannable
 import android.text.TextPaint
 import android.util.TypedValue
@@ -44,6 +46,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowSystemClock
+import org.robolectric.util.ReflectionHelpers
+import org.robolectric.util.ReflectionHelpers.ClassParameter
 import java.time.Duration
 
 /**
@@ -460,6 +464,73 @@ class SpoilerPaintingTest {
     assertTrue("Reveal should have completed", completed)
     assertTrue(span.revealed)
     assertFalse(span.revealing)
+  }
+
+  @Test
+  fun aRevealCompletesAtOnceWithAnimationsTurnedOff() {
+    val test = harness(document(paragraph(spoiler(text("secret")))))
+    test.draw()
+    val span = test.spans.single()
+    var completed = false
+
+    setAnimatorDurationScale(0f)
+    try {
+      test.drawer.revealSpan(span) { completed = true }
+      test.draw()
+    } finally {
+      setAnimatorDurationScale(1f)
+    }
+
+    assertTrue("Reveal should complete without waiting out its duration", completed)
+    assertTrue(span.revealed)
+  }
+
+  // Below API 33 the process scale can't be read back, so the setting is what the drawer follows.
+  @Test
+  fun aRevealStretchesWithTheAnimatorDurationScaleSetting() {
+    val test = harness(document(paragraph(spoiler(text("secret")))))
+    test.draw()
+    val span = test.spans.single()
+    var completed = false
+    Settings.Global.putFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 2f)
+
+    test.drawer.revealSpan(span) { completed = true }
+    ShadowSystemClock.advanceBy(Duration.ofMillis(600))
+    test.draw()
+    assertFalse("At 2×, a reveal is still running past its own duration", completed)
+
+    ShadowSystemClock.advanceBy(Duration.ofMillis(400))
+    test.draw()
+    assertTrue(completed)
+  }
+
+  @Test
+  @Config(sdk = [35])
+  fun aRevealFollowsTheProcessAnimatorDurationScale() {
+    val test = harness(document(paragraph(spoiler(text("secret")))))
+    test.draw()
+    val span = test.spans.single()
+    var completed = false
+
+    setAnimatorDurationScale(0.5f)
+    try {
+      test.drawer.revealSpan(span) { completed = true }
+      ShadowSystemClock.advanceBy(Duration.ofMillis(250))
+      test.draw()
+    } finally {
+      setAnimatorDurationScale(1f)
+    }
+
+    assertTrue("At 0.5×, a reveal ends in half its duration", completed)
+  }
+
+  // What the developer option "Animator duration scale" sets; the setter is hidden from the SDK.
+  private fun setAnimatorDurationScale(scale: Float) {
+    ReflectionHelpers.callStaticMethod<Unit>(
+      ValueAnimator::class.java,
+      "setDurationScale",
+      ClassParameter.from(Float::class.javaPrimitiveType, scale),
+    )
   }
 
   @Test

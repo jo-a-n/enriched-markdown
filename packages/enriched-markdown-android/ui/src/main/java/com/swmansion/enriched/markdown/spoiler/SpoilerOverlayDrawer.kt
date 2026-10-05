@@ -1,7 +1,10 @@
 package com.swmansion.enriched.markdown.spoiler
 
+import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.Build
+import android.provider.Settings
 import android.text.Layout
 import android.text.Spannable
 import android.text.Spanned
@@ -12,6 +15,7 @@ import androidx.core.graphics.withTranslation
 import com.swmansion.enriched.markdown.spans.SpoilerSpan
 import com.swmansion.enriched.markdown.styles.SpoilerStyle
 import java.lang.ref.WeakReference
+import kotlin.math.roundToLong
 
 /** Draws a [SpoilerSegmentOverlay] over each line of every concealed spoiler, and runs reveals. */
 internal class SpoilerOverlayDrawer(
@@ -173,7 +177,7 @@ internal class SpoilerOverlayDrawer(
     }
     span.markRevealing()
     reveals[span] =
-      Reveal(AnimationUtils.currentAnimationTimeMillis(), spoilerOverlay.revealDurationMillis, onAllComplete)
+      Reveal(AnimationUtils.currentAnimationTimeMillis(), revealDurationMillis(), onAllComplete)
     textViewReference.get()?.invalidate()
   }
 
@@ -181,6 +185,18 @@ internal class SpoilerOverlayDrawer(
     animator.stop()
     segments.keys.toList().forEach(::dropSegment)
     reveals.keys.toList().forEach(::finishReveal)
+  }
+
+  // A reveal runs on its own clock rather than a ValueAnimator's, so it applies the system's
+  // animator duration scale itself: slower or faster, or at once with animations turned off.
+  private fun revealDurationMillis(): Long = (spoilerOverlay.revealDurationMillis * animatorDurationScale()).roundToLong()
+
+  private fun animatorDurationScale(): Float {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return ValueAnimator.getDurationScale()
+    // The process can turn animators off without touching the setting, as battery saver does.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled()) return 0f
+    val resolver = textViewReference.get()?.context?.contentResolver ?: return 1f
+    return Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f).coerceAtLeast(0f)
   }
 
   private fun onFrame() {
