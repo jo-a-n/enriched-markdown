@@ -7,62 +7,62 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay
+import com.swmansion.enriched.markdown.spoiler.SpoilerLine
+import com.swmansion.enriched.markdown.spoiler.SpoilerLineOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlayHost
-import com.swmansion.enriched.markdown.spoiler.SpoilerSegment
-import com.swmansion.enriched.markdown.spoiler.SpoilerSegmentOverlay
 import android.graphics.Canvas as NativeCanvas
 import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 
 /**
- * A [SpoilerSegmentOverlay] drawn with Compose; return instances from
- * [CustomSpoilerOverlay.createSegmentOverlay]. Each call gets a [DrawScope] clipped to the segment,
- * with the host's [Density] and a [LayoutDirection] that follows [SpoilerSegment.isRtl].
+ * A [SpoilerLineOverlay] drawn with Compose; return instances from
+ * [CustomSpoilerOverlay.createLineOverlay]. Each call gets a [DrawScope] clipped to the line,
+ * with the host's [Density] and a [LayoutDirection] that follows [SpoilerLine.isRtl].
  */
-abstract class DrawScopeSpoilerSegmentOverlay(
+abstract class DrawScopeSpoilerLineOverlay(
   private val host: SpoilerOverlayHost,
-) : SpoilerSegmentOverlay() {
+) : SpoilerLineOverlay() {
   private var density = Density(host.density, host.fontScale)
   private val drawScope = CanvasDrawScope()
 
   private var nativeCanvas: NativeCanvas? = null
   private var composeCanvas: ComposeCanvas? = null
 
-  /** Draws the concealed segment. [segment] describes it as of this frame. */
-  abstract fun DrawScope.draw(segment: SpoilerSegment)
+  /** Draws the concealed line. [line] describes it as of this frame. */
+  abstract fun DrawScope.draw(line: SpoilerLine)
 
-  /** See [SpoilerSegmentOverlay.drawReveal]. The default is [drawFadingOut]. */
+  /** See [SpoilerLineOverlay.drawReveal]. The default is [drawFadingOut]. */
   open fun DrawScope.drawReveal(
-    segment: SpoilerSegment,
+    line: SpoilerLine,
     progress: Float,
   ) {
-    drawFadingOut(segment, progress)
+    drawFadingOut(line, progress)
   }
 
   /** Draws [DrawScope.draw] faded out by [progress], as the text fades in underneath. */
   protected fun DrawScope.drawFadingOut(
-    segment: SpoilerSegment,
+    line: SpoilerLine,
     progress: Float,
   ) {
-    // The fade lives in the base class, which draws back through draw(canvas, segment).
-    super.drawReveal(drawContext.canvas.nativeCanvas, segment, progress)
+    // The fade lives in the base class, which draws back through draw(canvas, line).
+    super.drawReveal(drawContext.canvas.nativeCanvas, line, progress)
   }
 
   final override fun draw(
     canvas: NativeCanvas,
-    segment: SpoilerSegment,
+    line: SpoilerLine,
   ) {
-    drawScope.draw(currentDensity(), segment.layoutDirection, wrap(canvas), Size(segment.width, segment.height)) {
-      draw(segment)
+    drawScope.draw(currentDensity(), line.layoutDirection, wrap(canvas), Size(line.width, line.height)) {
+      draw(line)
     }
   }
 
   final override fun drawReveal(
     canvas: NativeCanvas,
-    segment: SpoilerSegment,
+    line: SpoilerLine,
     progress: Float,
   ) {
-    drawScope.draw(currentDensity(), segment.layoutDirection, wrap(canvas), Size(segment.width, segment.height)) {
-      drawReveal(segment, progress)
+    drawScope.draw(currentDensity(), line.layoutDirection, wrap(canvas), Size(line.width, line.height)) {
+      drawReveal(line, progress)
     }
   }
 
@@ -80,11 +80,11 @@ abstract class DrawScopeSpoilerSegmentOverlay(
     return ComposeCanvas(canvas).also { composeCanvas = it }
   }
 
-  private val SpoilerSegment.layoutDirection: LayoutDirection
+  private val SpoilerLine.layoutDirection: LayoutDirection
     get() = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 }
 
-/** See [SpoilerSegment.drawText]. The scope's current transform applies. */
-fun DrawScope.drawSegmentText(segment: SpoilerSegment) {
-  segment.drawText(drawContext.canvas.nativeCanvas)
+/** See [SpoilerLine.drawText]. The scope's current transform applies. */
+fun DrawScope.drawLineText(line: SpoilerLine) {
+  line.drawText(drawContext.canvas.nativeCanvas)
 }

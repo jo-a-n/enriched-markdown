@@ -22,7 +22,7 @@ import com.swmansion.enriched.markdown.spans.ImageSpan
 import com.swmansion.enriched.markdown.spans.SpoilerSpan
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlayDrawer
-import com.swmansion.enriched.markdown.spoiler.computeSegmentRect
+import com.swmansion.enriched.markdown.spoiler.computeLineRect
 import com.swmansion.enriched.markdown.styles.SpoilerStyle
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport
@@ -58,7 +58,7 @@ import java.time.Duration
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
-// Robolectric's legacy graphics report zero font metrics, which collapses every segment rect to
+// Robolectric's legacy graphics report zero font metrics, which collapses every line rect to
 // zero height; the native runtime lays text out for real, which is what this geometry needs.
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SpoilerPaintingTest {
@@ -107,7 +107,7 @@ class SpoilerPaintingTest {
       super.drawRect(left, top, right, bottom, paint)
     }
 
-    // Overlays draw in their segment's coordinates, under a translation. getMatrix is deprecated
+    // Overlays draw in their line's coordinates, under a translation. getMatrix is deprecated
     // because a hardware canvas's matrix is implementation-defined; over a bitmap it is exact.
     @Suppress("DEPRECATION")
     private fun inViewCoordinates(rect: RectF): RectF {
@@ -176,10 +176,10 @@ class SpoilerPaintingTest {
     return Harness(textView, drawer, rendered)
   }
 
-  // MARK: Segment geometry
+  // MARK: Line geometry
 
   @Test
-  fun aSingleLineSpoilerPaintsOneSegment() {
+  fun aSingleLineSpoilerPaintsOneOverlay() {
     val canvas = harness(document(paragraph(spoiler(text("secret"))))).draw()
 
     assertEquals(1, canvas.roundRects.size)
@@ -187,7 +187,7 @@ class SpoilerPaintingTest {
   }
 
   @Test
-  fun aWrappedSpoilerPaintsOneSegmentPerLine() {
+  fun aWrappedSpoilerPaintsOneOverlayPerLine() {
     val long = List(40) { "concealed" }.joinToString(" ")
     val test = harness(document(paragraph(spoiler(text(long)))))
 
@@ -202,21 +202,21 @@ class SpoilerPaintingTest {
   }
 
   @Test
-  fun eachSegmentSitsOnItsOwnLineBand() {
+  fun eachLineSitsOnItsOwnBand() {
     val long = List(40) { "concealed" }.joinToString(" ")
     val test = harness(document(paragraph(spoiler(text(long)))))
     val canvas = test.draw()
 
     val tops = canvas.roundRects.map { it.first.top }
-    assertEquals("Segments must not share a band", tops.size, tops.toSet().size)
+    assertEquals("Lines must not share a band", tops.size, tops.toSet().size)
     canvas.roundRects.forEach { (rect, _) ->
-      assertTrue("Segment should have a positive area", rect.width() > 0f && rect.height() > 0f)
-      assertTrue("Segment should stay inside the view", rect.right <= WIDTH.toFloat() + 1f)
+      assertTrue("Line should have a positive area", rect.width() > 0f && rect.height() > 0f)
+      assertTrue("Line should stay inside the view", rect.right <= WIDTH.toFloat() + 1f)
     }
   }
 
   @Test
-  fun twoSpoilersPaintTwoSegments() {
+  fun twoSpoilersPaintTwoOverlays() {
     val canvas =
       harness(
         document(paragraph(spoiler(text("one")), text(" plain "), spoiler(text("two")))),
@@ -226,7 +226,7 @@ class SpoilerPaintingTest {
   }
 
   @Test
-  fun computeSegmentRectFollowsTheLayout() {
+  fun computeLineRectFollowsTheLayout() {
     val test = harness(document(paragraph(spoiler(text("secret")))))
     val layout = requireNotNull(test.textView.layout)
     val span = test.spans.single()
@@ -234,11 +234,11 @@ class SpoilerPaintingTest {
     val end = test.rendered.getSpanEnd(span)
 
     val rect =
-      computeSegmentRect(
+      computeLineRect(
         layout = layout,
         line = 0,
-        segmentStart = start,
-        segmentEnd = end,
+        start = start,
+        end = end,
         fontMetrics = layout.paint.fontMetrics,
         paddingLeft = 0f,
         paddingTop = 0f,
@@ -250,16 +250,16 @@ class SpoilerPaintingTest {
   }
 
   @Test
-  fun aZeroWidthSegmentIsSkipped() {
+  fun aZeroWidthLineIsSkipped() {
     val test = harness(document(paragraph(spoiler(text("secret")))))
     val layout = requireNotNull(test.textView.layout)
 
     val rect =
-      computeSegmentRect(
+      computeLineRect(
         layout = layout,
         line = 0,
-        segmentStart = 0,
-        segmentEnd = 0,
+        start = 0,
+        end = 0,
         fontMetrics = layout.paint.fontMetrics,
         paddingLeft = 0f,
         paddingTop = 0f,
@@ -269,7 +269,7 @@ class SpoilerPaintingTest {
   }
 
   @Test
-  fun aSegmentCoversTheSpansOwnFontSize() {
+  fun aLineCoversTheSpansOwnFontSize() {
     val test = harness(document(heading(1, spoiler(text("secret")))))
     val span = test.spans.single()
     assertTrue(
@@ -360,12 +360,12 @@ class SpoilerPaintingTest {
   }
 
   @Test
-  fun aSegmentOverABlockImageCoversTheWholeImage() {
+  fun aLineOverABlockImageCoversTheWholeImage() {
     val url = "test://spoiler-block-image"
     ImageCache.putOriginal(url, Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) })
     val style = styleWithOverlayColor()
     val rendered = render(document(paragraph(spoiler(image(url)))), style)
-    // A block image takes its width from the view it is registered with, as the segment views do,
+    // A block image takes its width from the view it is registered with, as the line views do,
     // so the text is laid out again once it has one.
     rendered
       .getSpans(0, rendered.length, ImageSpan::class.java)
@@ -574,7 +574,7 @@ class SpoilerPaintingTest {
     test.draw()
     test.drawer.revealSpan(span) {}
 
-    // Wide enough to pull the spoiler up onto the first line, so its old segment goes stale.
+    // Wide enough to pull the spoiler up onto the first line, so its old line goes stale.
     test.textView.layOutAt(WIDTH * 20)
     test.draw()
 

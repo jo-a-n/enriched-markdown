@@ -33,7 +33,7 @@ sealed interface SpoilerOverlay {
 }
 
 /**
- * An overlay of the app's own: builds one [SpoilerSegmentOverlay] for each line segment of every
+ * An overlay of the app's own: builds one [SpoilerLineOverlay] for each [SpoilerLine] of every
  * concealed spoiler, which draws the effect on the text view's canvas.
  *
  * A view rebuilds its overlays only when the new value is not `==` to the previous one, so make
@@ -42,17 +42,17 @@ sealed interface SpoilerOverlay {
  */
 interface CustomSpoilerOverlay : SpoilerOverlay {
   /**
-   * Called on the main thread whenever a segment comes into view: on the first draw, and again
+   * Called on the main thread whenever a spoiler line comes into view: on the first draw, and again
    * after the text reflows, an image under the spoiler loads, or the overlay or style changes.
    * Keep it cheap.
    */
-  fun createSegmentOverlay(
+  fun createLineOverlay(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
-  ): SpoilerSegmentOverlay
+  ): SpoilerLineOverlay
 
   /**
-   * How long a reveal takes, in milliseconds: [SpoilerSegmentOverlay.drawReveal]'s progress and
+   * How long a reveal takes, in milliseconds: [SpoilerLineOverlay.drawReveal]'s progress and
    * the text fading in underneath both run over it, scaled by the system's animator duration scale
    * as a `ValueAnimator` would be. Zero or less, or animations turned off, reveals at once without
    * calling `drawReveal`.
@@ -60,7 +60,7 @@ interface CustomSpoilerOverlay : SpoilerOverlay {
   val revealDurationMillis: Long get() = REVEAL_DURATION_MS
 }
 
-/** The text view a [SpoilerSegmentOverlay] draws into. */
+/** The text view a [SpoilerLineOverlay] draws into. */
 interface SpoilerOverlayHost {
   /** Pixels per dp on the view's display. */
   val density: Float
@@ -70,7 +70,7 @@ interface SpoilerOverlayHost {
 
   /**
    * Asks for one more draw, for example after an asset the overlay needs has loaded. Safe to call
-   * from any thread. An overlay that animates sets [SpoilerSegmentOverlay.isAnimated] instead.
+   * from any thread. An overlay that animates sets [SpoilerLineOverlay.isAnimated] instead.
    */
   fun invalidate()
 }
@@ -78,15 +78,15 @@ interface SpoilerOverlayHost {
 internal val SpoilerOverlay.revealDurationMillis: Long
   get() = if (this is CustomSpoilerOverlay) revealDurationMillis else REVEAL_DURATION_MS
 
-internal fun SpoilerOverlay.createSegmentOverlay(
+internal fun SpoilerOverlay.createLineOverlay(
   host: SpoilerOverlayHost,
   style: SpoilerStyle,
-): SpoilerSegmentOverlay =
+): SpoilerLineOverlay =
   when (this) {
-    is SpoilerOverlay.Particles -> ParticleSegmentOverlay(style.color, density, speed)
+    is SpoilerOverlay.Particles -> ParticleLineOverlay(style.color, density, speed)
 
-    is SpoilerOverlay.Solid -> SolidSegmentOverlay(style.color, cornerRadius * host.density)
+    is SpoilerOverlay.Solid -> SolidLineOverlay(style.color, cornerRadius * host.density)
 
     // The member, which wins over this extension.
-    is CustomSpoilerOverlay -> createSegmentOverlay(host, style)
+    is CustomSpoilerOverlay -> createLineOverlay(host, style)
   }
