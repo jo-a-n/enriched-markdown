@@ -109,14 +109,49 @@ class CodeBackgroundPaintingTest {
     from: Int = drawn.codeStart,
     to: Int = drawn.codeEnd,
   ) {
-    val layout = requireNotNull(drawn.textView.layout)
-    val background = drawn.backgrounds.single()
+    assertCovers(requireNotNull(drawn.textView.layout), drawn.backgrounds.single(), from, to)
+  }
+
+  private fun assertCovers(
+    layout: Layout,
+    background: RectF,
+    from: Int,
+    to: Int,
+  ) {
     val fromX = layout.getPrimaryHorizontal(from)
     val toX = layout.getPrimaryHorizontal(to)
     assertTrue("The code must have a width for this to be meaningful", fromX != toX)
     assertEquals(minOf(fromX, toX), background.left, 0.01f)
     assertEquals(maxOf(fromX, toX), background.right, 0.01f)
   }
+
+  /**
+   * Asserts that code wrapping across lines gets one background per line, each spanning only the
+   * code's glyphs on that line. A line the code continues past ends at the space it wraps on,
+   * which is not drawn, so neither is its background.
+   */
+  private fun assertCoversEachLineOfTheCode(drawn: Drawn) {
+    val layout = requireNotNull(drawn.textView.layout)
+    val firstLine = layout.getLineForOffset(drawn.codeStart)
+    val lastLine = layout.getLineForOffset(drawn.codeEnd - 1)
+    assertTrue("The code must wrap for this to be meaningful", lastLine - firstLine >= 2)
+    assertEquals(lastLine - firstLine + 1, drawn.backgrounds.size)
+
+    for (line in firstLine..lastLine) {
+      val continues = drawn.codeEnd > layout.getLineEnd(line)
+      val to = if (continues) layout.getLineEnd(line) - 1 else drawn.codeEnd
+      if (continues) assertEquals("Line $line must wrap on a space", ' ', drawn.rendered[to])
+      assertCovers(layout, drawn.backgrounds[line - firstLine], maxOf(drawn.codeStart, layout.getLineStart(line)), to)
+    }
+  }
+
+  /** Draws code long enough to wrap across at least three lines, between [before] and [after]. */
+  private fun drawWrappedCode(
+    before: String,
+    word: String,
+    after: String,
+    style: StyleConfig = style(),
+  ): Drawn = draw(document(paragraph(text(before), code("$word ".repeat(40).trimEnd()), text(after))), style)
 
   /**
    * Draws [code] followed by a word too long to share its line, so the first line wraps right
@@ -177,6 +212,37 @@ class CodeBackgroundPaintingTest {
 
     assertEquals(Layout.DIR_RIGHT_TO_LEFT, requireNotNull(drawn.textView.layout).getParagraphDirection(0))
     assertCoversTheCode(drawn, to = drawn.codeEnd - 1)
+  }
+
+  @Test
+  fun wrappedCodeEndsAtItsLastGlyphOnEachLine() {
+    assertCoversEachLineOfTheCode(drawWrappedCode("call ", "render", " once"))
+  }
+
+  @Test
+  fun wrappedCodeFollowsCenteredText() {
+    assertCoversEachLineOfTheCode(drawWrappedCode("call ", "render", " once", style(TextAlignment.CENTER)))
+  }
+
+  @Test
+  fun wrappedCodeFollowsRightAlignedText() {
+    assertCoversEachLineOfTheCode(drawWrappedCode("call ", "render", " once", style(TextAlignment.RIGHT)))
+  }
+
+  @Test
+  fun wrappedRightToLeftCodeCoversEachLine() {
+    val drawn = drawWrappedCode("קרא ל", "שלום", " פעם אחת")
+
+    assertEquals(Layout.DIR_RIGHT_TO_LEFT, requireNotNull(drawn.textView.layout).getParagraphDirection(0))
+    assertCoversEachLineOfTheCode(drawn)
+  }
+
+  @Test
+  fun wrappedLeftToRightCodeInRightToLeftTextCoversEachLine() {
+    val drawn = drawWrappedCode("קרא ל", "render", " פעם אחת")
+
+    assertEquals(Layout.DIR_RIGHT_TO_LEFT, requireNotNull(drawn.textView.layout).getParagraphDirection(0))
+    assertCoversEachLineOfTheCode(drawn)
   }
 
   @Test

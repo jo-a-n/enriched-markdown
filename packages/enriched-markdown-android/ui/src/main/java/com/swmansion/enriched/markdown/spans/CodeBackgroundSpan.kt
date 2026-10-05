@@ -85,17 +85,21 @@ class CodeBackgroundSpan(
     // The layout drawing this line, when the view showing the text registered with this span. Its
     // x positions are in the same frame as left and right, which the layout draws from.
     val layout = textViewRef?.get()?.layout?.takeIf { it.text === text }
+    // On a line the code continues onto or past, the background runs to the line's glyphs, which
+    // only a layout knows for every alignment and direction; without one it runs to the view edges.
     val startX =
       when {
-        !isFirst -> left.toFloat() + InlineBackgroundGeometry.leadingMarginAt(text, start)
-        layout != null -> layout.horizontalOnLine(spanStart, lineNum)
-        else -> left + measuredOffset(text, start, spanStart, p)
+        layout != null && isFirst -> layout.horizontalOnLine(spanStart, lineNum)
+        layout != null -> layout.leadingEdge(lineNum)
+        isFirst -> left + measuredOffset(text, start, spanStart, p)
+        else -> left.toFloat() + InlineBackgroundGeometry.leadingMarginAt(text, start)
       }
     val endX =
       when {
-        !isLast -> right.toFloat()
-        layout != null -> layout.horizontalOnLine(spanEnd, lineNum)
-        else -> left + measuredOffset(text, start, spanEnd, p)
+        layout != null && isLast -> layout.horizontalOnLine(spanEnd, lineNum)
+        layout != null -> layout.trailingEdge(lineNum)
+        isLast -> left + measuredOffset(text, start, spanEnd, p)
+        else -> right.toFloat()
       }
 
     rect.set(min(startX, endX), top.toFloat(), max(startX, endX), finalBottom.toFloat())
@@ -125,6 +129,23 @@ class CodeBackgroundSpan(
     line: Int,
   ): Float {
     if (offset < getLineEnd(line) || line == lineCount - 1) return getPrimaryHorizontal(offset)
+    return trailingEdge(line)
+  }
+
+  /** The x where [line]'s first character is drawn: its right edge in right-to-left text. */
+  private fun Layout.leadingEdge(line: Int): Float = getPrimaryHorizontal(getLineStart(line))
+
+  /**
+   * The x where [line]'s last glyph ends, leaving out trailing whitespace: its left edge in
+   * right-to-left text. It is read where the whitespace starts, as getLineLeft and getLineRight
+   * round centered lines differently from where the layout draws them. A line broken mid-word has
+   * no whitespace to read, and its offset there would start the next line.
+   */
+  private fun Layout.trailingEdge(line: Int): Float {
+    val lineEnd = getLineEnd(line)
+    var glyphsEnd = lineEnd
+    while (glyphsEnd > getLineStart(line) && text[glyphsEnd - 1].isWhitespace()) glyphsEnd--
+    if (glyphsEnd < lineEnd) return getPrimaryHorizontal(glyphsEnd)
     return if (getParagraphDirection(line) == Layout.DIR_RIGHT_TO_LEFT) getLineLeft(line) else getLineRight(line)
   }
 
