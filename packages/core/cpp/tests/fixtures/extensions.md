@@ -13,3 +13,6 @@ $$
 $$
 
 Wiki link [[Target Page]] and [[Target|Alias]].
+
+Delimiter runs longer than the extension takes: |||three||| and ===three===
+and +++three+++ and x^^2^^.

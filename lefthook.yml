@@ -8,7 +8,7 @@ pre-commit:
       glob: '*.{js,ts, jsx, tsx}'
       run: yarn typecheck
     clang-format:
-      glob: '*.{h,m,mm,cpp}'
+      glob: '*.{h,hpp,m,mm,cpp}'
       exclude:
         - '**/Pods/**'
         - '**/build/**'

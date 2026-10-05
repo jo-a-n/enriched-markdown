@@ -6,8 +6,8 @@
 #   * the vendored parser's output moving. It is synced from our MD4C fork by
 #     fetch-md4c.sh, so every sync can change how a document parses; the golden
 #     AST dump below makes that a reviewable diff instead of a surprise.
-#   * a global symbol that would collide with another embedded MD4C copy in the
-#     same application (#846).
+#   * a global symbol or a public name that would collide with another embedded
+#     MD4C copy in the same application (#846).
 #
 # Usage:
 #   scripts/test-core-parser.sh             verify
@@ -111,31 +111,50 @@ if ! curl -fsSL --retry 2 "$base/md4c.c" -o "$WORK/other/md4c.c" \
   exit 1
 fi
 cat > "$WORK/coexist.cpp" <<'EOF'
-/* An application linking Enriched and another MD4C-embedding dependency. */
-#include "MD4CParser.hpp"
+/*
+ * An application linking Enriched and another MD4C-embedding dependency.
+ *
+ * Both headers are included in this one translation unit, on purpose and in
+ * this order: a vendored enrmrkd.h that re-introduced an MD_-prefixed name, or
+ * whose include guard regressed to MD4C_H and so swallowed the second header,
+ * must not compile. The link step below then covers the symbols.
+ */
+#include "enrmrkd.h"
 extern "C" {
 #include "other/md4c.h"
 }
+#include "MD4CParser.hpp"
 #include <cstddef>
 #include <iostream>
 #include <string>
 static int onBlock(MD_BLOCKTYPE, void *, void *) { return 0; }
 static int onSpan(MD_SPANTYPE, void *, void *) { return 0; }
 static int onText(MD_TEXTTYPE, const MD_CHAR *, MD_SIZE, void *) { return 0; }
+static int onEnrmBlock(ENRMRKD_BLOCKTYPE, void *, void *) { return 0; }
+static int onEnrmSpan(ENRMRKD_SPANTYPE, void *, void *) { return 0; }
+static int onEnrmText(ENRMRKD_TEXTTYPE, const ENRMRKD_CHAR *, ENRMRKD_SIZE, void *) { return 0; }
 int main() {
   const std::string doc = "# hi *there* ||spoiler||\n";
   const auto root = Markdown::MD4CParser().parse(doc, Markdown::Md4cFlags{}, true);
   MD_PARSER other{0, MD_DIALECT_GITHUB, onBlock, onBlock, onSpan, onSpan, onText, nullptr, nullptr};
   const int rc = md_parse(doc.c_str(), (MD_SIZE)doc.size(), &other, nullptr);
-  if (!root || rc != 0) {
-    std::cerr << "coexistence check failed: root=" << (root ? "ok" : "null") << " rc=" << rc << "\n";
+  ENRMRKD_PARSER ours{0,          ENRMRKD_DIALECT_GITHUB,
+                      onEnrmBlock, onEnrmBlock,
+                      onEnrmSpan,  onEnrmSpan,
+                      onEnrmText,  nullptr,
+                      nullptr};
+  const int ourRc = enrmrkd_parse(doc.c_str(), (ENRMRKD_SIZE)doc.size(), &ours, nullptr);
+  if (!root || rc != 0 || ourRc != 0) {
+    std::cerr << "coexistence check failed: root=" << (root ? "ok" : "null") << " rc=" << rc
+              << " ourRc=" << ourRc << "\n";
     return 1;
   }
   return 0;
 }
 EOF
 "$CC_BIN" -O1 -std=c99 -c "$WORK/other/md4c.c" -o "$WORK/other.o"
-"$CXX_BIN" -O1 -std=c++17 -I "$CPP_ROOT/parser" -I "$WORK" -c "$WORK/coexist.cpp" -o "$WORK/coexist.o"
+"$CXX_BIN" -O1 -std=c++17 -I "$CPP_ROOT/enrmrkd" -I "$CPP_ROOT/parser" -I "$WORK" \
+  -DENRMRKD_USE_UTF8=1 -c "$WORK/coexist.cpp" -o "$WORK/coexist.o"
 "$CXX_BIN" -O1 -std=c++17 -I "$CPP_ROOT/enrmrkd" -I "$CPP_ROOT/parser" -c "$CPP_ROOT/parser/MD4CParser.cpp" -o "$WORK/parser.o"
 "$CXX_BIN" "$WORK/other.o" "$WORK/enrmrkd.o" "$WORK/parser.o" "$WORK/coexist.o" -o "$WORK/coexist"
 "$WORK/coexist"

@@ -6,6 +6,9 @@
 ~~struck through~~ and https://example.com/bare plus www.example.com
 and someone@example.com.
 
+Prefixed e-mail autolinks: mailto:someone@example.com and
+xmpp:someone@example.com.
+
 > [!NOTE]
 > An admonition body.
 
