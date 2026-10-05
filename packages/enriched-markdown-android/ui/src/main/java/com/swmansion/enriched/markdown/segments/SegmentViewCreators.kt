@@ -3,7 +3,7 @@ package com.swmansion.enriched.markdown.segments
 import android.content.Context
 import android.util.TypedValue
 import com.swmansion.enriched.markdown.EnrichedMarkdownInternalText
-import com.swmansion.enriched.markdown.spans.registerCodeBackgrounds
+import com.swmansion.enriched.markdown.spans.registerWithSpans
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.utils.text.interaction.TaskListHitTestResult
@@ -41,8 +41,7 @@ object SegmentViewCreators {
       onLinkLongPressCallback = config.onLinkLongPress
       lastElementMarginBottom = segment.lastElementMarginBottom
       applyStyledText(segment.styledText)
-      segment.imageSpans.forEach { it.registerTextView(this) }
-      registerCodeBackgrounds(segment.styledText)
+      registerWithSpans(segment.styledText)
       applySelectionColors(config.selectionColor, config.selectionHandleColor)
     }
 
@@ -52,8 +51,7 @@ object SegmentViewCreators {
   ) {
     view.lastElementMarginBottom = segment.lastElementMarginBottom
     view.applyStyledText(segment.styledText)
-    segment.imageSpans.forEach { it.registerTextView(view) }
-    view.registerCodeBackgrounds(segment.styledText)
+    view.registerWithSpans(segment.styledText)
   }
 
   fun createTableView(

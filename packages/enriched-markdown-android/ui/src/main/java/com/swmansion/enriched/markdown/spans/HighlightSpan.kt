@@ -3,10 +3,12 @@ package com.swmansion.enriched.markdown.spans
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.text.Spanned
 import android.text.TextPaint
 import android.text.style.CharacterStyle
 import android.text.style.LineBackgroundSpan
+import android.widget.TextView
 import com.swmansion.enriched.markdown.renderer.BlockStyle
 import com.swmansion.enriched.markdown.renderer.SpanStyleCache
 import com.swmansion.enriched.markdown.spoiler.colorWithAlpha
@@ -25,9 +27,12 @@ class HighlightSpan(
   private val styleCache: SpanStyleCache,
   private val blockStyle: BlockStyle,
 ) : CharacterStyle(),
-  LineBackgroundSpan {
+  LineBackgroundSpan,
+  TextViewAwareSpan {
   private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
   private val metricsPaint = TextPaint()
+  private val band = RectF()
+  private val geometry = InlineBackgroundGeometry()
 
   override fun updateDrawState(tp: TextPaint) {
     styleCache.highlightColor?.let { tp.applyColorPreserving(it, *styleCache.colorsToPreserve) }
@@ -59,22 +64,7 @@ class HighlightSpan(
     val visibility = text.spoilerTextAlpha(maxOf(spanStart, start), minOf(spanEnd, end))
     if (visibility <= 0f) return
 
-    val isFirst = spanStart >= start
-    val isLast = spanEnd <= end
-
-    val leadingMargin = InlineBackgroundGeometry.leadingMarginAt(text, start)
-    val startX =
-      if (isFirst) {
-        InlineBackgroundGeometry.horizontalOffset(text, start, end, spanStart, p, leadingMargin) + left
-      } else {
-        left.toFloat() + leadingMargin
-      }
-    val endX =
-      if (isLast) {
-        InlineBackgroundGeometry.horizontalOffset(text, start, end, spanEnd, p, leadingMargin) + left
-      } else {
-        right.toFloat()
-      }
+    geometry.horizontalBounds(text, lineNum, start, end, spanStart, spanEnd, left, right, p, band)
 
     // Bound by the glyphs' ascent/descent, clamped to the line box so a tall line height never
     // lets the band bleed into its neighbours. `p` is set in the view's size, so measure with the
@@ -82,10 +72,13 @@ class HighlightSpan(
     metricsPaint.set(p)
     metricsPaint.textSize = blockStyle.fontSize
     val metrics = metricsPaint.fontMetricsInt
-    val bandTop = max(top.toFloat(), (baseline + metrics.ascent).toFloat())
-    val bandBottom = min(bottom.toFloat(), (baseline + metrics.descent).toFloat())
+    band.top = max(top.toFloat(), (baseline + metrics.ascent).toFloat())
+    band.bottom = min(bottom.toFloat(), (baseline + metrics.descent).toFloat())
 
     backgroundPaint.color = colorWithAlpha(backgroundColor, visibility)
-    canvas.drawRect(min(startX, endX), bandTop, max(startX, endX), bandBottom, backgroundPaint)
+    canvas.drawRect(band.left, band.top, band.right, band.bottom, backgroundPaint)
   }
+
+  /** Makes this span position its band from [view]'s layout, which is the one that draws it. */
+  override fun registerTextView(view: TextView) = geometry.registerTextView(view)
 }
