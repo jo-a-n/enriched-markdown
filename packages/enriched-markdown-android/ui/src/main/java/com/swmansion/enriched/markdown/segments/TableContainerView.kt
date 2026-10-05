@@ -280,6 +280,7 @@ class TableContainerView(
     data.attributedText
       .getSpans(0, data.attributedText.length, ImageSpan::class.java)
       .forEach { it.registerTextView(cellTextView) }
+    cellTextView.registerCodeBackgrounds(data.attributedText)
   }
 
   override fun onMeasure(
@@ -504,16 +505,6 @@ class TableContainerView(
       layoutDirection = View.LAYOUT_DIRECTION_LOCALE
       textDirection = View.TEXT_DIRECTION_LOCALE
       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-    }
-
-    override fun onTextChanged(
-      text: CharSequence?,
-      start: Int,
-      lengthBefore: Int,
-      lengthAfter: Int,
-    ) {
-      super.onTextChanged(text, start, lengthBefore, lengthAfter)
-      registerCodeBackgrounds(text)
     }
   }
 

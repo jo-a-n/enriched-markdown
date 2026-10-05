@@ -15,6 +15,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.spans.CodeBackgroundSpan
+import com.swmansion.enriched.markdown.spans.registerCodeBackgrounds
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.styles.TextAlignment
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport
@@ -81,14 +82,20 @@ class CodeBackgroundPaintingTest {
     val codeEnd: Int get() = rendered.getSpanEnd(span)
   }
 
+  /**
+   * Draws [document] in a markdown text view that registers with its code backgrounds, as
+   * SegmentViewCreators does, or, when not [registered], in a plain TextView that does not.
+   */
   private fun draw(
     document: MarkdownASTNode,
     style: StyleConfig = style(),
-    textView: TextView = EnrichedMarkdownInternalText(context),
+    registered: Boolean = true,
   ): Drawn {
     val rendered = render(document, style)
+    val textView = if (registered) EnrichedMarkdownInternalText(context) else TextView(context)
     textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, style.paragraphStyle.fontSize)
     textView.text = rendered
+    if (registered) textView.registerCodeBackgrounds(rendered)
     textView.measure(
       View.MeasureSpec.makeMeasureSpec(WIDTH, View.MeasureSpec.EXACTLY),
       View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
@@ -256,21 +263,21 @@ class CodeBackgroundPaintingTest {
   @Test
   fun aViewThatDidNotRegisterStillPlacesStartAlignedCode() {
     assertCoversTheCode(
-      draw(document(paragraph(text("call "), code("render()"), text(" once"))), textView = TextView(context)),
+      draw(document(paragraph(text("call "), code("render()"), text(" once"))), registered = false),
     )
   }
 
   @Test
   fun aViewThatDidNotRegisterStillFollowsTheListIndent() {
     assertCoversTheCode(
-      draw(document(unorderedList(listItem(paragraph(text("call "), code("render()"))))), textView = TextView(context)),
+      draw(document(unorderedList(listItem(paragraph(text("call "), code("render()"))))), registered = false),
     )
   }
 
   @Test
   fun aViewThatDidNotRegisterStillEndsIndentedCodeThatStartsTheLine() {
     assertCoversTheCode(
-      draw(document(unorderedList(listItem(paragraph(code("render()"), text(" once"))))), textView = TextView(context)),
+      draw(document(unorderedList(listItem(paragraph(code("render()"), text(" once"))))), registered = false),
     )
   }
 }

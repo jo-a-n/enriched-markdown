@@ -8,7 +8,6 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import com.swmansion.enriched.markdown.accessibility.AccessibleMarkdownTextView
 import com.swmansion.enriched.markdown.segments.BlockSegmentView
-import com.swmansion.enriched.markdown.spans.registerCodeBackgrounds
 import com.swmansion.enriched.markdown.spoiler.SpoilerCapable
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlayDrawer
@@ -112,16 +111,6 @@ class EnrichedMarkdownInternalText
       // Kept, not cleared: the next draw after reattaching picks the animation back up.
       spoilerOverlayDrawer?.stop()
       super.onDetachedFromWindow()
-    }
-
-    override fun onTextChanged(
-      text: CharSequence?,
-      start: Int,
-      lengthBefore: Int,
-      lengthAfter: Int,
-    ) {
-      super.onTextChanged(text, start, lengthBefore, lengthAfter)
-      registerCodeBackgrounds(text)
     }
 
     override fun onDraw(canvas: Canvas) {

@@ -18,8 +18,8 @@ import kotlin.math.min
 
 /**
  * Registers this view with every [CodeBackgroundSpan] in [text], so each positions its background
- * from the layout the view draws with. A view showing rendered markdown calls it whenever its text
- * changes.
+ * from the layout the view draws with. Called wherever rendered markdown is given to a view, next to
+ * [ImageSpan.registerTextView].
  */
 internal fun TextView.registerCodeBackgrounds(text: CharSequence?) {
   if (text !is Spanned) return
