@@ -44,7 +44,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "==> Building the vendored parser and the AST dumper"
 "$CC_BIN" -O1 -std=c99 -DENRMRKD_USE_UTF8=1 -c "$CPP_ROOT/enrmrkd/enrmrkd.c" -o "$WORK/enrmrkd.o"
-"$CXX_BIN" -O1 -std=c++17 -Wall -I "$CPP_ROOT/parser" -I "$CPP_ROOT/wasm" \
+"$CXX_BIN" -O1 -std=c++17 -Wall -I "$CPP_ROOT/enrmrkd" -I "$CPP_ROOT/parser" -I "$CPP_ROOT/wasm" \
   "$TESTS_DIR/ast_dump.cpp" \
   "$CPP_ROOT/parser/MD4CParser.cpp" \
   "$CPP_ROOT/wasm/ASTSerializer.cpp" \
@@ -136,7 +136,7 @@ int main() {
 EOF
 "$CC_BIN" -O1 -std=c99 -c "$WORK/other/md4c.c" -o "$WORK/other.o"
 "$CXX_BIN" -O1 -std=c++17 -I "$CPP_ROOT/parser" -I "$WORK" -c "$WORK/coexist.cpp" -o "$WORK/coexist.o"
-"$CXX_BIN" -O1 -std=c++17 -I "$CPP_ROOT/parser" -c "$CPP_ROOT/parser/MD4CParser.cpp" -o "$WORK/parser.o"
+"$CXX_BIN" -O1 -std=c++17 -I "$CPP_ROOT/enrmrkd" -I "$CPP_ROOT/parser" -c "$CPP_ROOT/parser/MD4CParser.cpp" -o "$WORK/parser.o"
 "$CXX_BIN" "$WORK/other.o" "$WORK/enrmrkd.o" "$WORK/parser.o" "$WORK/coexist.o" -o "$WORK/coexist"
 "$WORK/coexist"
 echo "    both parsers linked and ran in one binary"

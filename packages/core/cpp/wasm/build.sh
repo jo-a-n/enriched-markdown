@@ -42,6 +42,7 @@ em++ \
   "$CPP_ROOT/parser/MD4CParser.cpp" \
   "$WORK/enrmrkd.o" \
   -I "$CPP_ROOT" \
+  -I "$CPP_ROOT/enrmrkd" \
   -I "$SCRIPT_DIR" \
   -O2 \
   -std=c++17 \

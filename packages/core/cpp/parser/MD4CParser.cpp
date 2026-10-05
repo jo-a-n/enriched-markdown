@@ -1,5 +1,5 @@
 #include "MD4CParser.hpp"
-#include "../enrmrkd/enrmrkd.h"
+#include "enrmrkd.h"
 #include <cctype>
 #include <cstring>
 #include <vector>
