@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+import com.swmansion.enriched.markdown.spans.ImageSpan
 import com.swmansion.enriched.markdown.spans.SpoilerSpan
 import com.swmansion.enriched.markdown.spoiler.CustomSpoilerOverlay
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay
@@ -24,9 +25,12 @@ import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport.render
 import com.swmansion.enriched.markdown.test.TestAstFactory.document
+import com.swmansion.enriched.markdown.test.TestAstFactory.image
+import com.swmansion.enriched.markdown.test.TestAstFactory.lineBreak
 import com.swmansion.enriched.markdown.test.TestAstFactory.paragraph
 import com.swmansion.enriched.markdown.test.TestAstFactory.spoiler
 import com.swmansion.enriched.markdown.test.TestAstFactory.text
+import com.swmansion.enriched.markdown.utils.text.ImageCache
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -216,6 +220,50 @@ class SpoilerCustomOverlayTest {
         .last()
         .style.color,
     )
+  }
+
+  @Test
+  fun anImageLoadingUnderTheSpoilerRecreatesItsSegments() {
+    val url = "test://spoiler-late-image"
+    ImageCache.putOriginal(url, Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) })
+    val probe = Probe()
+    // After a line break the image is a block one, which is drawn at its final width only once it
+    // is registered with its view, the same path a download completing takes.
+    val test = harness(document(paragraph(spoiler(text("secret"), lineBreak(), image(url)))), ProbeOverlay("a", probe))
+    test.draw()
+    val first = probe.created.toList()
+    assertTrue(first.isNotEmpty())
+
+    test.rendered
+      .getSpans(0, test.rendered.length, ImageSpan::class.java)
+      .single()
+      .registerTextView(test.textView)
+    test.draw()
+
+    // The text's segment is replaced in place; the image's line may now get a segment of its own.
+    val textSegment = requireNotNull(first.single().segment)
+    assertEquals(1, first.single().removals)
+    val replacement = probe.created.drop(1).map { requireNotNull(it.segment) }
+    assertTrue(replacement.any { it.start == textSegment.start && it.end == textSegment.end })
+    val created = probe.created.size
+    test.draw()
+    assertEquals("The new segments live on", created, probe.created.size)
+  }
+
+  @Test
+  fun aRevealInFlightKeepsItsSegmentsWhenTheContentChanges() {
+    val probe = Probe()
+    val test = harness(document(paragraph(spoiler(text("secret")))), ProbeOverlay("a", probe))
+    test.draw()
+    test.drawer.revealSpan(test.span) {}
+
+    test.span.contentVersion++
+    test.advanceBy(100)
+    test.draw()
+
+    val segment = probe.created.single()
+    assertEquals(0, segment.removals)
+    assertEquals(1, segment.revealProgress.size)
   }
 
   // MARK: Segment data

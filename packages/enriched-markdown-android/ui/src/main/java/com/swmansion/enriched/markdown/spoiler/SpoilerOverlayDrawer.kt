@@ -21,6 +21,7 @@ internal class SpoilerOverlayDrawer(
     val span: SpoilerSpan,
     val overlay: SpoilerSegmentOverlay,
     val segment: SpoilerSegment,
+    val contentVersion: Int,
   )
 
   private class Reveal(
@@ -106,7 +107,13 @@ internal class SpoilerOverlayDrawer(
       val reveal = reveals[span]
       for ((index, lineSegment) in lineSegments.withIndex()) {
         val key = SegmentKey(span, lineSegment.line, lineSegment.start, lineSegment.end)
-        val existing = segments[key]
+        var existing = segments[key]
+        // New content under a segment that stayed put (an image loading) starts its overlay over,
+        // so nothing it cached goes stale. A reveal in flight keeps fading out what it started with.
+        if (existing != null && existing.contentVersion != span.contentVersion && reveal == null) {
+          segments.remove(key)?.overlay?.onRemoved()
+          existing = null
+        }
         // A reveal in flight only fades out the segments it started with.
         if (existing == null && reveal != null) continue
         val live =
@@ -114,6 +121,7 @@ internal class SpoilerOverlayDrawer(
             span = span,
             overlay = spoilerOverlay.createSegmentOverlay(this, style),
             segment = SpoilerSegment(spanStart, spanEnd, lineSegment.start, lineSegment.end, ctx.text),
+            contentVersion = span.contentVersion,
           ).also { segments[key] = it }
         activeKeys.add(key)
 

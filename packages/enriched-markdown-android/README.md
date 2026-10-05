@@ -333,8 +333,9 @@ EnrichedMarkdownText(markdown = content, spoilerOverlay = PixelatedSpoiler())
 ```
 
 A spoiler gets one segment overlay per line. The view creates it when the segment comes into view
-and removes it when the spoiler is revealed, when the text reflows onto different lines, or when the
-overlay or the style changes, so keep `createSegment` cheap. The canvas is moved to the segment's
+and removes it when the spoiler is revealed, when the text reflows onto different lines, when an
+image under the spoiler finishes loading, or when the overlay or the style changes, so keep
+`createSegment` cheap. The canvas is moved to the segment's
 top-left corner and clipped to its size. The view rebuilds its overlays only when the new
 `spoilerOverlay` is not `==` to the old one, so make custom overlays data classes or objects, or
 `remember` them: a plain class created in every recomposition restarts every overlay each time.

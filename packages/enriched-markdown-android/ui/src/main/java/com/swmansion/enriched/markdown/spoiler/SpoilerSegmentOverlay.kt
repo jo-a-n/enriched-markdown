@@ -39,6 +39,9 @@ abstract class SpoilerSegmentOverlay {
    */
   open val isAnimated: Boolean get() = false
 
-  /** The segment left the layout, was revealed, or the overlay was replaced: release resources. */
+  /**
+   * The segment left the layout, was revealed, or its content, overlay or style changed: release
+   * resources.
+   */
   open fun onRemoved() {}
 }

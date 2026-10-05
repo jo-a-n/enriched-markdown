@@ -48,7 +48,8 @@ sealed interface SpoilerOverlay {
 interface CustomSpoilerOverlay : SpoilerOverlay {
   /**
    * Called on the main thread whenever a segment comes into view: on the first draw, and again
-   * after the text reflows or the overlay or style changes. Keep it cheap.
+   * after the text reflows, an image under the spoiler loads, or the overlay or style changes.
+   * Keep it cheap.
    */
   fun createSegment(
     host: SpoilerOverlayHost,
