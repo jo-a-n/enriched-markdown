@@ -143,8 +143,8 @@ template <typename StyleStruct> inline size_t computeStyleFingerprint(const Styl
   // Variants change link metrics: a font family, or a pill box around the label.
   for (const auto &variant : s.linkVariants) {
     hashFields(variant.pattern, variant.fontFamily, variant.pill.enabled, variant.pill.label, variant.pill.iconUri,
-               variant.pill.paddingHorizontal, variant.pill.paddingVertical, variant.pill.borderWidth,
-               variant.pill.maxWidth);
+               variant.pill.paddingHorizontal, variant.pill.paddingVertical, variant.pill.lineHeight,
+               variant.pill.borderWidth, variant.pill.maxWidth);
   }
   hashFields(s.highlight.backgroundColor, s.highlight.color);
 

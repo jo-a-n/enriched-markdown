@@ -61,6 +61,7 @@ export function normalizeLinkPillStyle(style: LinkVariantStyle) {
     borderRadius: dimension(config.borderRadius, 8),
     paddingHorizontal: dimension(config.paddingHorizontal, 6),
     paddingVertical: dimension(config.paddingVertical, 2),
+    lineHeight: dimension(config.lineHeight, 0),
     borderWidth: dimension(config.borderWidth, 0),
     maxWidth: dimension(config.maxWidth, 0),
   };

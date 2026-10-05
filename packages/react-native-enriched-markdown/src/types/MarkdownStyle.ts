@@ -140,6 +140,16 @@ export interface LinkPillStyle {
   borderRadius?: number;
   paddingHorizontal?: number;
   paddingVertical?: number;
+  /**
+   * Minimum line height of a block (paragraph, list item, heading, quote) that holds
+   * this pill. It applies to every line of that block and only ever raises the block's
+   * own `lineHeight`; it does not size the pill. Use it to keep pills on consecutive
+   * lines apart without loosening text that has no pills. Unset by default.
+   *
+   * For streamed text prefer the block's own `lineHeight`: this one takes effect when a
+   * link completes and becomes a pill, which moves the text around it.
+   */
+  lineHeight?: number;
   borderWidth?: number;
   borderColor?: string;
   /** Maximum width in points/DIP. 0 uses the available text width. */
