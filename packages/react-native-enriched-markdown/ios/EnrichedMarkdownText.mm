@@ -73,6 +73,11 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
                     selectionEnd:(NSUInteger)selectionEnd;
 @end
 
+#if !TARGET_OS_OSX
+@interface EnrichedMarkdownText () <ENRMLinkContextMenuSource>
+@end
+#endif
+
 @implementation EnrichedMarkdownText {
   ENRMPlatformTextView *_textView;
   ENRMMarkdownParser *_parser;
@@ -994,6 +999,11 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   __weak EnrichedMarkdownText *weakSelf = self;
   return ENRMLinkMenuConfigurationForTextItem(textView, textItem, defaultMenu, _linkContextMenus, _enableLinkPreview,
                                               ^(NSString *url) { [weakSelf emitLinkLongPress:url]; });
+}
+
+- (ENRMLinkContextMenus *)linkContextMenusForTextView:(UITextView *)textView
+{
+  return _linkContextMenus;
 }
 
 - (BOOL)textView:(ENRMPlatformTextView *)textView

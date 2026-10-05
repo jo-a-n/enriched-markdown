@@ -2,6 +2,7 @@
 #import "ENRMAdmonitionIcons.h"
 #import "ENRMCodeBlockContainerView.h"
 #import "ENRMFeatureFlags.h"
+#import "ENRMLinkContextMenus.h"
 #import "ENRMSegmentHeightMeasurer.h"
 #import "ENRMTableIOSGridView.h"
 #import "ENRMTextInteractionUtils.h"
@@ -114,7 +115,7 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
 @end
 
 #if !TARGET_OS_OSX
-@interface ENRMBlockquoteContainerView () <UITextViewDelegate>
+@interface ENRMBlockquoteContainerView () <UITextViewDelegate, ENRMLinkContextMenuSource>
 @end
 #endif
 
@@ -491,6 +492,11 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
 {
   return ENRMLinkMenuConfigurationForTextItem(textView, textItem, defaultMenu, self.dynamicProps.linkContextMenus,
                                               self.dynamicProps.enableLinkPreview, self.onLinkLongPress);
+}
+
+- (ENRMLinkContextMenus *)linkContextMenusForTextView:(UITextView *)textView
+{
+  return self.dynamicProps.linkContextMenus;
 }
 
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction

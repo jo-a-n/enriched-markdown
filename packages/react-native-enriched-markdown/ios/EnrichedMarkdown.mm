@@ -94,6 +94,11 @@ static char kENRMSegmentFadeAnimatorKey;
                     selectionEnd:(NSUInteger)selectionEnd;
 @end
 
+#if !TARGET_OS_OSX
+@interface EnrichedMarkdown () <ENRMLinkContextMenuSource>
+@end
+#endif
+
 @implementation EnrichedMarkdown {
   ENRMMarkdownParser *_parser;
   StyleConfig *_config;
@@ -1570,6 +1575,11 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
   __weak EnrichedMarkdown *weakSelf = self;
   return ENRMLinkMenuConfigurationForTextItem(textView, textItem, defaultMenu, _linkContextMenus, _enableLinkPreview,
                                               ^(NSString *url) { [weakSelf emitLinkLongPress:url]; });
+}
+
+- (ENRMLinkContextMenus *)linkContextMenusForTextView:(UITextView *)textView
+{
+  return _linkContextMenus;
 }
 
 - (BOOL)textView:(UITextView *)textView
