@@ -62,8 +62,10 @@ jobs:
               - '.github/**'
             core-cpp:
               - 'packages/core/cpp/**'
+              - 'packages/react-native-enriched-markdown/src/web/wasm/**'
               - 'scripts/fetch-md4c.sh'
               - 'scripts/test-core-parser.sh'
+              - 'scripts/test-web-bundle.mjs'
               - '.github/**'
 
   # The parser is vendored from software-mansion-labs/md4c, so a sync can change
@@ -77,8 +79,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
+      - name: Setup
+        uses: ./.github/actions/setup
+
       - name: Check the vendored parser and the AST it produces
         run: ./scripts/test-core-parser.sh
+
+      # The web bundle is a committed build artifact that nothing rebuilds on
+      # install, so it silently falls behind packages/core/cpp.
+      - name: Check the committed WASM bundle against the same AST
+        run: node scripts/test-web-bundle.mjs
+
+      # Nothing else gates these sources: the clang-format hook is local and
+      # can be bypassed, and no other job formats packages/core/cpp.
+      - name: Check formatting
+        run: yarn lint-clang:core-parser
 
   rn-lint:
     needs: changes

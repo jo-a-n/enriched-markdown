@@ -20,6 +20,11 @@ OUT_DIR="${OUT_DIR:-$REPO_ROOT/packages/react-native-enriched-markdown/src/web/w
 
 mkdir -p "$OUT_DIR"
 
+# Intermediates stay out of the source tree: a failed link used to leave
+# enrmrkd.o sitting next to the bundle.
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
 echo "Building md4c WASM…"
 
 # Compile the C file separately (no -std=c++17)
@@ -27,14 +32,15 @@ emcc \
   -I "$CPP_ROOT" \
   -O2 \
   -c "$CPP_ROOT/enrmrkd/enrmrkd.c" \
-  -o "$OUT_DIR/enrmrkd.o"
+  -o "$WORK/enrmrkd.o"
 
-# Compile C++ sources and link everything together
-emcc \
+# Compile C++ sources and link everything together. em++, not emcc: emscripten
+# 6.0.6 turned DEFAULT_TO_CXX off, so emcc no longer links the C++ runtime.
+em++ \
   "$SCRIPT_DIR/md4c_wasm.cpp" \
   "$SCRIPT_DIR/ASTSerializer.cpp" \
   "$CPP_ROOT/parser/MD4CParser.cpp" \
-  "$OUT_DIR/enrmrkd.o" \
+  "$WORK/enrmrkd.o" \
   -I "$CPP_ROOT" \
   -I "$SCRIPT_DIR" \
   -O2 \
@@ -53,7 +59,5 @@ emcc \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s GROWABLE_ARRAYBUFFERS=0 \
   -o "$OUT_DIR/md4c.js"
-
-rm "$OUT_DIR/enrmrkd.o"
 
 echo "Done → $OUT_DIR/md4c.js"

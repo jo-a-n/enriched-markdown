@@ -13,7 +13,14 @@
 #   scripts/test-core-parser.sh             verify
 #   scripts/test-core-parser.sh --update    rewrite the golden AST dump
 #
+# The last check downloads upstream MD4C, and a failed download fails the run.
+# Outside CI, ENRM_SKIP_COEXISTENCE_CHECK=1 lets an offline run skip just that.
+#
 set -euo pipefail
+
+# The golden dump records the fixtures in glob order, and the symbol listing is
+# sorted; both must collate the same way on every machine.
+export LC_ALL=C
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CPP_ROOT="$REPO_ROOT/packages/core/cpp"
@@ -63,9 +70,14 @@ else
 fi
 
 echo "==> Comparing the parsed AST against the golden dump"
-fixtures=$(find "$TESTS_DIR/fixtures" -name '*.md' | sort)
-# shellcheck disable=SC2086
-"$WORK/ast-dump" $fixtures > "$WORK/ast.txt"
+shopt -s nullglob
+fixtures=("$TESTS_DIR"/fixtures/*.md)
+shopt -u nullglob
+if [ "${#fixtures[@]}" -eq 0 ]; then
+  echo "FAIL: no fixtures in ${TESTS_DIR#"$REPO_ROOT"/}/fixtures" >&2
+  exit 1
+fi
+"$WORK/ast-dump" "${fixtures[@]}" > "$WORK/ast.txt"
 if [ "$update" -eq 1 ]; then
   mv "$WORK/ast.txt" "$GOLDEN"
   echo "    golden dump updated: ${GOLDEN#"$REPO_ROOT"/}"
@@ -85,10 +97,18 @@ mkdir -p "$WORK/other"
 base="https://raw.githubusercontent.com/mity/md4c/$UPSTREAM_MD4C_REF/src"
 if ! curl -fsSL --retry 2 "$base/md4c.c" -o "$WORK/other/md4c.c" \
   || ! curl -fsSL --retry 2 "$base/md4c.h" -o "$WORK/other/md4c.h"; then
-  echo "    could not fetch upstream MD4C, skipped (offline?)"
-  echo
-  echo "PASS"
-  exit 0
+  if [ "${ENRM_SKIP_COEXISTENCE_CHECK:-0}" = "1" ] && [ -z "${CI:-}" ]; then
+    echo "    could not fetch upstream MD4C; skipped by ENRM_SKIP_COEXISTENCE_CHECK"
+    echo
+    echo "PASS (coexistence check skipped)"
+    exit 0
+  fi
+  echo "FAIL: could not fetch mity/md4c $UPSTREAM_MD4C_REF from $base" >&2
+  echo >&2
+  echo "The coexistence check is the regression guard for #846, so a download" >&2
+  echo "failure is a failure, not a skip. Working offline, outside CI, you can" >&2
+  echo "run the rest with ENRM_SKIP_COEXISTENCE_CHECK=1." >&2
+  exit 1
 fi
 cat > "$WORK/coexist.cpp" <<'EOF'
 /* An application linking Enriched and another MD4C-embedding dependency. */

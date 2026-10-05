@@ -3,8 +3,8 @@
  * change in the vendored parser or in MD4CParser shows up as a golden diff.
  * See scripts/test-core-parser.sh.
  */
-#include "MD4CParser.hpp"
 #include "ASTSerializer.hpp"
+#include "MD4CParser.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -50,10 +50,8 @@ struct Variant {
 
 int main(int argc, char **argv) {
   const std::vector<Variant> variants = {
-      {"defaults-gfm", Markdown::Md4cFlags{}, true},
-      {"defaults-commonmark", Markdown::Md4cFlags{}, false},
-      {"extensions-off-gfm", allDisabled(), true},
-      {"extensions-on-gfm", allEnabled(), true},
+      {"defaults-gfm", Markdown::Md4cFlags{}, true},     {"defaults-commonmark", Markdown::Md4cFlags{}, false},
+      {"extensions-off-gfm", allDisabled(), true},       {"extensions-on-gfm", allEnabled(), true},
       {"extensions-on-commonmark", allEnabled(), false},
   };
 

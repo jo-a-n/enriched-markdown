@@ -231,9 +231,8 @@ public:
 
       case ENRMRKD_BLOCK_TH:
       case ENRMRKD_BLOCK_TD: {
-        auto node =
-            std::make_shared<MarkdownASTNode>(type == ENRMRKD_BLOCK_TH ? NodeType::TableHeaderCell
-                                                                     : NodeType::TableCell);
+        auto node = std::make_shared<MarkdownASTNode>(type == ENRMRKD_BLOCK_TH ? NodeType::TableHeaderCell
+                                                                               : NodeType::TableCell);
         if (detail) {
           auto *tdDetail = static_cast<ENRMRKD_BLOCK_TD_DETAIL *>(detail);
           const char *alignStr;

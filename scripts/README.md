@@ -34,4 +34,18 @@ Host-compiled checks for `packages/core/cpp`, run in CI by the `core-parser` job
 ./scripts/test-core-parser.sh --update   # re-record the golden dump after an intended change
 ```
 
+The last check downloads upstream MD4C, and a failed download fails the run - a required check that passes when the network is down guards nothing. Offline, and only outside CI, `ENRM_SKIP_COEXISTENCE_CHECK=1` skips that one step.
+
 A `sync-md4c` that changes parsing shows up here as a golden diff to review, rather than reaching a release unnoticed.
+
+The `core-parser` job also runs `yarn lint-clang:core-parser`, the only thing that checks `packages/core/cpp` formatting: the `clang-format` pre-commit hook is local and skippable.
+
+## test-web-bundle.mjs
+
+Loads the committed `packages/react-native-enriched-markdown/src/web/wasm/md4c.js` and compares the AST it produces for the same fixtures against the same golden dump, for the two flag variants the WASM entry point can reach.
+
+```sh
+node scripts/test-web-bundle.mjs
+```
+
+That bundle is a build artifact, and nothing rebuilds it on install, `prepare` or `prepack` - a change under `packages/core/cpp` reaches native at once and web only when someone runs `yarn build:wasm`. It had fallen a feature behind before this check existed, so web silently parsed documents differently from native. If it fails, rebuild the bundle and commit it.
