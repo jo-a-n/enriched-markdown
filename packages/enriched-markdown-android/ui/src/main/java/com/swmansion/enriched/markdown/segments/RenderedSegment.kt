@@ -6,9 +6,9 @@ import android.content.Context
 import android.text.Spannable
 import android.view.View
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
+import com.swmansion.enriched.markdown.plugin.PluginBlockSegment
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.plugin.PluginSegmentPayload
 import com.swmansion.enriched.markdown.plugin.PluginSnapshot
@@ -49,7 +49,7 @@ sealed interface RenderedSegment {
   /** Holds the plugin that produced [payload], so its view is built by that same plugin. */
   data class Custom<P : PluginSegmentPayload>(
     val pluginId: String,
-    val plugin: BlockSegmentPlugin<P>,
+    val plugin: PluginBlockSegment<P>,
     val payload: P,
     override val signature: Long,
   ) : RenderedSegment {
@@ -120,7 +120,7 @@ object MarkdownSegmentRenderer {
 
   private fun <P : PluginSegmentPayload> renderCustom(
     pluginId: String,
-    plugin: BlockSegmentPlugin<P>,
+    plugin: PluginBlockSegment<P>,
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,

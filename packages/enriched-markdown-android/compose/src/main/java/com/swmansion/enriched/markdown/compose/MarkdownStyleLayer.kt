@@ -4,7 +4,7 @@ package com.swmansion.enriched.markdown.compose
 
 import androidx.compose.runtime.Immutable
 import com.swmansion.enriched.markdown.compose.style.PluginStylePatch
-import com.swmansion.enriched.markdown.compose.style.PluginStyleScope
+import com.swmansion.enriched.markdown.compose.style.PluginStyleUnits
 import com.swmansion.enriched.markdown.compose.style.StyleConfigMerger
 import com.swmansion.enriched.markdown.compose.style.StylePatch
 import com.swmansion.enriched.markdown.compose.style.StyleResolveContext
@@ -54,8 +54,8 @@ internal data class MarkdownStyleLayer(
       if (pluginPatches.isEmpty()) {
         null
       } else {
-        val scope = PluginStyleScope(resolveContext.context, units)
-        pluginPatches.mapValues { (key, patch) -> applyPluginPatch(patch, base.extensions[key], scope) }
+        val pluginUnits = PluginStyleUnits(resolveContext.context, units)
+        pluginPatches.mapValues { (key, patch) -> applyPluginPatch(patch, base.extensions[key], pluginUnits) }
       }
 
     return StyleConfigMerger.merge(
@@ -97,6 +97,6 @@ internal data class MarkdownStyleLayer(
   private fun applyPluginPatch(
     patch: PluginStylePatch<*>,
     base: Any?,
-    scope: PluginStyleScope,
-  ): Any = (patch as PluginStylePatch<Any>).apply(base, scope)
+    units: PluginStyleUnits,
+  ): Any = (patch as PluginStylePatch<Any>).apply(base, units)
 }

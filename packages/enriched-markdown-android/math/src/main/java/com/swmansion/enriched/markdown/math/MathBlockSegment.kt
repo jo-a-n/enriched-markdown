@@ -5,8 +5,8 @@ package com.swmansion.enriched.markdown.math
 import android.content.Context
 import android.view.View
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
+import com.swmansion.enriched.markdown.plugin.PluginBlockSegment
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.plugin.PluginSegmentPayload
 import com.swmansion.enriched.markdown.renderer.latexSourceOf
@@ -29,7 +29,7 @@ class MathSegmentPayload internal constructor(
  * Display math standing on its own: core gives it a segment of its own, and this gives that
  * segment a [MathContainerView].
  */
-class MathBlockSegment : BlockSegmentPlugin<MathSegmentPayload> {
+class MathBlockSegment : PluginBlockSegment<MathSegmentPayload> {
   /**
    * Lays out here rather than in the view; RaTeX's own async API runs the same parse off the main
    * thread. A failure is reported here too, so it is reported again for every new document, as an

@@ -11,7 +11,7 @@ import androidx.compose.ui.unit.TextUnit
 import com.swmansion.enriched.markdown.compose.MarkdownStyleBuilder
 import com.swmansion.enriched.markdown.compose.MarkdownStyleDsl
 import com.swmansion.enriched.markdown.compose.style.PluginStylePatch
-import com.swmansion.enriched.markdown.compose.style.PluginStyleScope
+import com.swmansion.enriched.markdown.compose.style.PluginStyleUnits
 import com.swmansion.enriched.markdown.math.InlineMathStyle
 import com.swmansion.enriched.markdown.math.InlineMathStyleKey
 import com.swmansion.enriched.markdown.math.MathDefaults
@@ -36,16 +36,16 @@ internal data class MathStylePatch(
 ) : PluginStylePatch<MathStyle> {
   override fun apply(
     base: MathStyle?,
-    scope: PluginStyleScope,
+    units: PluginStyleUnits,
   ): MathStyle {
-    val current = base ?: MathDefaults.mathStyle(scope.context)
+    val current = base ?: MathDefaults.mathStyle(units.context)
     return current.copy(
-      fontSize = fontSize?.let { scope.px(it) } ?: current.fontSize,
-      color = color?.let { scope.argb(it) } ?: current.color,
-      backgroundColor = backgroundColor?.let { scope.argb(it) } ?: current.backgroundColor,
-      padding = padding?.let { scope.px(it) } ?: current.padding,
-      marginTop = marginTop?.let { scope.px(it) } ?: current.marginTop,
-      marginBottom = marginBottom?.let { scope.px(it) } ?: current.marginBottom,
+      fontSize = fontSize?.let { units.px(it) } ?: current.fontSize,
+      color = color?.let { units.argb(it) } ?: current.color,
+      backgroundColor = backgroundColor?.let { units.argb(it) } ?: current.backgroundColor,
+      padding = padding?.let { units.px(it) } ?: current.padding,
+      marginTop = marginTop?.let { units.px(it) } ?: current.marginTop,
+      marginBottom = marginBottom?.let { units.px(it) } ?: current.marginBottom,
       textAlign = alignment?.toMathTextAlignment() ?: current.textAlign,
     )
   }
@@ -102,10 +102,10 @@ internal data class InlineMathStylePatch(
 ) : PluginStylePatch<InlineMathStyle> {
   override fun apply(
     base: InlineMathStyle?,
-    scope: PluginStyleScope,
+    units: PluginStyleUnits,
   ): InlineMathStyle {
     val current = base ?: MathDefaults.inlineMathStyle()
-    return current.copy(color = color?.let { scope.argb(it) } ?: current.color)
+    return current.copy(color = color?.let { units.argb(it) } ?: current.color)
   }
 }
 

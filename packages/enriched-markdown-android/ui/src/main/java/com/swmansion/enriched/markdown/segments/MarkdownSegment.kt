@@ -3,9 +3,9 @@
 package com.swmansion.enriched.markdown.segments
 
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
+import com.swmansion.enriched.markdown.plugin.PluginBlockSegment
 import com.swmansion.enriched.markdown.plugin.PluginSnapshot
 
 sealed interface MarkdownSegment {
@@ -20,7 +20,7 @@ sealed interface MarkdownSegment {
   /** A node a plugin claimed as its own block segment. The payload is produced later, at render time. */
   data class Custom(
     val pluginId: String,
-    val plugin: BlockSegmentPlugin<*>,
+    val plugin: PluginBlockSegment<*>,
     val node: MarkdownASTNode,
   ) : MarkdownSegment
 }

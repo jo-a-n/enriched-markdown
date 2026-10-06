@@ -14,7 +14,7 @@ import com.swmansion.enriched.markdown.plugin.InternalPluginApi
  * [context] is available for defaults that have to read resources or theme attributes.
  */
 @InternalPluginApi
-class PluginStyleScope internal constructor(
+class PluginStyleUnits internal constructor(
   val context: Context,
   private val units: StyleUnits,
 ) {
@@ -43,6 +43,6 @@ class PluginStyleScope internal constructor(
 interface PluginStylePatch<S : Any> {
   fun apply(
     base: S?,
-    scope: PluginStyleScope,
+    units: PluginStyleUnits,
   ): S
 }

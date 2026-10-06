@@ -33,6 +33,6 @@ interface PluginRegistry {
    */
   fun registerBlockSegment(
     type: MarkdownASTNode.NodeType,
-    segment: BlockSegmentPlugin<*>,
+    segment: PluginBlockSegment<*>,
   )
 }

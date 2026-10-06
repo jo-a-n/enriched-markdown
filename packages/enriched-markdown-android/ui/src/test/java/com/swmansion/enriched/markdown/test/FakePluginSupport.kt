@@ -10,9 +10,9 @@ import android.text.style.ReplacementSpan
 import android.view.View
 import android.widget.TextView
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
-import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.MarkdownPlugin
+import com.swmansion.enriched.markdown.plugin.PluginBlockSegment
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.plugin.PluginInlineSpan
 import com.swmansion.enriched.markdown.plugin.PluginRegistry
@@ -78,7 +78,7 @@ data class FakePayload(
 
 class FakeBlockSegment(
   private val marker: String = FakePlugin.ID,
-) : BlockSegmentPlugin<FakePayload> {
+) : PluginBlockSegment<FakePayload> {
   var createdViews = 0
     private set
   var updatedViews = 0

@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.sp
 import com.swmansion.enriched.markdown.compose.MarkdownStyleBuilder
 import com.swmansion.enriched.markdown.compose.MarkdownStyleDsl
 import com.swmansion.enriched.markdown.compose.style.PluginStylePatch
-import com.swmansion.enriched.markdown.compose.style.PluginStyleScope
+import com.swmansion.enriched.markdown.compose.style.PluginStyleUnits
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.styles.StyleExtensionKey
 
@@ -28,12 +28,12 @@ internal data class FakePluginStyle(
     val DEFAULT_COLOR = Color(0xFF445566)
     val DEFAULT_PADDING = 4.dp
 
-    /** The plugin's own default, converted through the scope it is resolved with. */
-    fun default(scope: PluginStyleScope): FakePluginStyle =
+    /** The plugin's own default, converted through the units it is resolved with. */
+    fun default(units: PluginStyleUnits): FakePluginStyle =
       FakePluginStyle(
-        fontSize = scope.px(DEFAULT_FONT_SIZE),
-        color = scope.argb(DEFAULT_COLOR),
-        padding = scope.px(DEFAULT_PADDING),
+        fontSize = units.px(DEFAULT_FONT_SIZE),
+        color = units.argb(DEFAULT_COLOR),
+        padding = units.px(DEFAULT_PADDING),
       )
   }
 }
@@ -50,13 +50,13 @@ internal data class FakePluginStylePatch(
 ) : PluginStylePatch<FakePluginStyle> {
   override fun apply(
     base: FakePluginStyle?,
-    scope: PluginStyleScope,
+    units: PluginStyleUnits,
   ): FakePluginStyle {
-    val current = base ?: FakePluginStyle.default(scope)
+    val current = base ?: FakePluginStyle.default(units)
     return current.copy(
-      fontSize = fontSize?.let { scope.px(it) } ?: current.fontSize,
-      color = color?.let { scope.argb(it) } ?: current.color,
-      padding = padding?.let { scope.px(it) } ?: current.padding,
+      fontSize = fontSize?.let { units.px(it) } ?: current.fontSize,
+      color = color?.let { units.argb(it) } ?: current.color,
+      padding = padding?.let { units.px(it) } ?: current.padding,
     )
   }
 }

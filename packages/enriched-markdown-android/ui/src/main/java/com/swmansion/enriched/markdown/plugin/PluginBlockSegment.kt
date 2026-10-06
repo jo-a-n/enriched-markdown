@@ -11,7 +11,7 @@ import com.swmansion.enriched.markdown.styles.StyleConfig
  * touch views; create/update/matches run on the main thread.
  */
 @InternalPluginApi
-interface BlockSegmentPlugin<P : PluginSegmentPayload> {
+interface PluginBlockSegment<P : PluginSegmentPayload> {
   /**
    * Render-thread, so do expensive work here rather than in [updateView]. Returns null to fall back
    * to core text rendering for this node.

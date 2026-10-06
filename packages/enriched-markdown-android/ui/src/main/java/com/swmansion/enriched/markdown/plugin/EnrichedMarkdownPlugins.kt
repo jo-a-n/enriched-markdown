@@ -11,7 +11,7 @@ import com.swmansion.enriched.markdown.renderer.RendererConfig
 @InternalPluginApi
 class BlockSegmentRegistration internal constructor(
   val pluginId: String,
-  val segment: BlockSegmentPlugin<*>,
+  val segment: PluginBlockSegment<*>,
 )
 
 /**
@@ -77,7 +77,7 @@ class PluginSnapshot internal constructor(
     val pluginId: String,
   ) : PluginRegistry {
     val nodeRenderers = LinkedHashMap<NodeType, (RendererConfig, Context) -> NodeRenderer>()
-    val blockSegments = LinkedHashMap<NodeType, BlockSegmentPlugin<*>>()
+    val blockSegments = LinkedHashMap<NodeType, PluginBlockSegment<*>>()
 
     override fun registerNodeRenderer(
       type: NodeType,
@@ -88,7 +88,7 @@ class PluginSnapshot internal constructor(
 
     override fun registerBlockSegment(
       type: NodeType,
-      segment: BlockSegmentPlugin<*>,
+      segment: PluginBlockSegment<*>,
     ) {
       blockSegments[type] = segment
     }
