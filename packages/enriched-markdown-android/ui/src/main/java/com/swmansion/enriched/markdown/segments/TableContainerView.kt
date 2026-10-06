@@ -34,6 +34,7 @@ import com.swmansion.enriched.markdown.utils.common.serialization.MarkdownASTSer
 import com.swmansion.enriched.markdown.utils.text.conversion.HTMLGenerator
 import com.swmansion.enriched.markdown.utils.text.view.LinkLongPressMovementMethod
 import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfig
+import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfigurable
 import com.swmansion.enriched.markdown.views.ContextMenuPopup
 import kotlin.math.ceil
 import kotlin.math.max
@@ -43,7 +44,8 @@ class TableContainerView(
   context: Context,
   private val styleConfig: StyleConfig,
 ) : FrameLayout(context),
-  BlockSegmentView {
+  BlockSegmentView,
+  SelectionMenuConfigurable {
   internal val tableStyle: TableStyle = styleConfig.tableStyle
 
   override val segmentMarginTop: Int get() = tableStyle.marginTop.toInt()
@@ -53,7 +55,7 @@ class TableContainerView(
 
   var onLinkPress: ((String) -> Unit)? = null
   var onLinkLongPress: ((String) -> Unit)? = null
-  var selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig()
+  override var selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig()
 
   private val scrollView =
     HorizontalScrollView(context).apply {

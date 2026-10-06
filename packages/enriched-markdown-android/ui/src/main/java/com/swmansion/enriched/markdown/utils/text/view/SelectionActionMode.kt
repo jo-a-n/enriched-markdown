@@ -36,6 +36,14 @@ data class SelectionMenuConfig(
 }
 
 /**
+ * A segment view with a copy menu of its own. [EnrichedMarkdown.setSelectionMenuConfig] hands a new
+ * config to every segment view implementing this, a plugin's included, without rebuilding them.
+ */
+interface SelectionMenuConfigurable {
+  var selectionMenuConfig: SelectionMenuConfig
+}
+
+/**
  * Creates an ActionMode.Callback that adds custom copy options and
  * overrides the default "Copy" action to include HTML for rich text support.
  */

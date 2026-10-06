@@ -31,6 +31,7 @@ import com.swmansion.enriched.markdown.utils.text.interaction.TaskListHitTestRes
 import com.swmansion.enriched.markdown.utils.text.interaction.TaskListTapUtils
 import com.swmansion.enriched.markdown.utils.text.interaction.TaskListToggleUtils
 import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfig
+import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfigurable
 import com.swmansion.enriched.markdown.utils.text.view.applySelectionColors
 import kotlin.math.max
 import kotlin.math.min
@@ -267,10 +268,7 @@ class EnrichedMarkdown(
   fun setSelectionMenuConfig(config: SelectionMenuConfig) {
     if (selectionMenuConfig == config) return
     selectionMenuConfig = config
-    segmentViews.filterIsInstance<EnrichedMarkdownInternalText>().forEach {
-      it.selectionMenuConfig = config
-    }
-    segmentViews.filterIsInstance<TableContainerView>().forEach {
+    segmentViews.filterIsInstance<SelectionMenuConfigurable>().forEach {
       it.selectionMenuConfig = config
     }
   }
