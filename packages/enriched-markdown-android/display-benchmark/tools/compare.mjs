@@ -65,21 +65,16 @@ const resultsSuffix = '-benchmarkData.json';
 // Ratios inside this band are noise, not a change.
 const noiseBand = { faster: 0.8, slower: 1.25 };
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
-  try {
-    const options = parseArgs(process.argv.slice(2));
-    if (options.report) {
-      reportSaved(options);
-    } else {
-      main(options);
-    }
-  } catch (error) {
-    console.error(`\n${error.message}`);
-    process.exitCode = 2;
+try {
+  const options = parseArgs(process.argv.slice(2));
+  if (options.report) {
+    reportSaved(options);
+  } else {
+    main(options);
   }
+} catch (error) {
+  console.error(`\n${error.message}`);
+  process.exitCode = 2;
 }
 
 function main(options) {
@@ -331,7 +326,7 @@ function gradle(side, task, device, extraArguments = []) {
 // Entries are named like "full[complex_large]", maybe prefixed by suppressed
 // errors ("EMULATOR_..."). Anything else throws rather than silently missing
 // from the report; only matching names and finite numbers are kept.
-export function parseResults(json) {
+function parseResults(json) {
   const results = new Map();
   for (const entry of json?.benchmarks ?? []) {
     const name = String(entry?.name);
@@ -367,7 +362,7 @@ function finiteOrUndefined(value) {
 }
 
 // Text and Markdown reports; a row measured on one side only has no ratio.
-export function report(head, base) {
+function report(head, base) {
   const keys = new Set([...head.keys(), ...(base?.keys() ?? [])]);
   const rows = [...keys]
     .map((key) => ({ head: head.get(key), base: base?.get(key) }))
