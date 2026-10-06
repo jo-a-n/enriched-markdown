@@ -19,6 +19,7 @@ import com.swmansion.enriched.markdown.EnrichedMarkdown as NativeMarkdownView
 import com.swmansion.enriched.markdown.TaskListItemToggle as TaskListItemToggleInternal
 import com.swmansion.enriched.markdown.parser.Md4cFlags as Md4cFlagsInternal
 import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins as EnrichedMarkdownPluginsInternal
+import com.swmansion.enriched.markdown.plugin.MarkdownPlugin as MarkdownPluginInternal
 import com.swmansion.enriched.markdown.plugin.PluginEvent as PluginEventInternal
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay as SpoilerOverlayInternal
 
@@ -32,6 +33,8 @@ typealias PluginEvent = PluginEventInternal
 
 typealias EnrichedMarkdownPlugins = EnrichedMarkdownPluginsInternal
 
+typealias MarkdownPlugin = MarkdownPluginInternal
+
 /**
  * Renders [markdown] using the native markdown TextView inside Compose.
  *
@@ -41,6 +44,9 @@ typealias EnrichedMarkdownPlugins = EnrichedMarkdownPluginsInternal
  * [flags] selects the optional md4c syntax extensions.
  *
  * [spoilerOverlay] picks how `||spoiler||` text is concealed until it is tapped.
+ *
+ * [plugins] defaults to those enabled by the enclosing plugin scopes (`LatexMathPlugin { ... }`),
+ * and outside any to those installed app-wide through [EnrichedMarkdownPlugins].
  *
  * [onPluginEvent] receives events reported by installed plugins (for example an expression a
  * plugin could not render), once per distinct event until [markdown] is replaced rather than
@@ -61,6 +67,7 @@ fun EnrichedMarkdownText(
   onTaskListItemToggle: (TaskListItemToggle) -> Unit = {},
   taskListToggleEnabled: Boolean = true,
   spoilerOverlay: SpoilerOverlay = SpoilerOverlay.Particles,
+  plugins: List<MarkdownPlugin>? = LocalMarkdownPlugins.current,
   onPluginEvent: (PluginEvent) -> Unit = {},
 ) {
   val context = LocalContext.current
@@ -96,6 +103,7 @@ fun EnrichedMarkdownText(
         setOnPluginEventCallback { event -> onPluginEventState(event) }
         setEnableTaskListItemToggle(taskListToggleEnabled)
         setSpoilerOverlay(spoilerOverlay)
+        setPlugins(plugins)
         setMarkdownStyle(styleConfig)
         setMd4cFlags(flags)
         setIsSelectable(selectable)
@@ -110,6 +118,7 @@ fun EnrichedMarkdownText(
       view.setOnPluginEventCallback { event -> onPluginEventState(event) }
       view.setEnableTaskListItemToggle(taskListToggleEnabled)
       view.setSpoilerOverlay(spoilerOverlay)
+      view.setPlugins(plugins)
       view.setMarkdownStyle(styleConfig)
       view.setMd4cFlags(flags)
       view.setIsSelectable(selectable)
