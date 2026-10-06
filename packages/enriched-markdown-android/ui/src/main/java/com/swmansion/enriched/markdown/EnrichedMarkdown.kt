@@ -524,7 +524,7 @@ class EnrichedMarkdown(
     ) {
       when (segment) {
         is RenderedSegment.Text -> SegmentViewCreators.updateTextView(view as EnrichedMarkdownInternalText, segment)
-        is RenderedSegment.Table -> SegmentViewCreators.updateTableView(view as TableContainerView, segment, segmentViewConfig())
+        is RenderedSegment.Table -> SegmentViewCreators.updateTableView(view as TableContainerView, segment)
         is RenderedSegment.Custom<*> -> segment.updateView(view, segmentViewConfig())
       }
     }
