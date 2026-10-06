@@ -1,8 +1,8 @@
 package swmansion.enriched.markdown.android.example
 
 import android.app.Application
+import com.swmansion.enriched.markdown.compose.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.math.LatexMathPlugin
-import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 
 /**
  * Math ships as its own artifact (`com.swmansion.enriched.markdown:math`), so rendering it takes

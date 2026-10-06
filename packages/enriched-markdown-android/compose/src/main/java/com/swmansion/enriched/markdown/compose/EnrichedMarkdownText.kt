@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import com.swmansion.enriched.markdown.EnrichedMarkdown as NativeMarkdownView
 import com.swmansion.enriched.markdown.TaskListItemToggle as TaskListItemToggleInternal
 import com.swmansion.enriched.markdown.parser.Md4cFlags as Md4cFlagsInternal
+import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins as EnrichedMarkdownPluginsInternal
 import com.swmansion.enriched.markdown.plugin.PluginEvent as PluginEventInternal
 import com.swmansion.enriched.markdown.spoiler.SpoilerOverlay as SpoilerOverlayInternal
 
@@ -28,6 +29,8 @@ typealias TaskListItemToggle = TaskListItemToggleInternal
 typealias SpoilerOverlay = SpoilerOverlayInternal
 
 typealias PluginEvent = PluginEventInternal
+
+typealias EnrichedMarkdownPlugins = EnrichedMarkdownPluginsInternal
 
 /**
  * Renders [markdown] using the native markdown TextView inside Compose.

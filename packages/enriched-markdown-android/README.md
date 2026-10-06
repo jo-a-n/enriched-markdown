@@ -47,8 +47,8 @@ Install the plugin once, at startup, before any markdown is rendered:
 
 ```kotlin
 import android.app.Application
+import com.swmansion.enriched.markdown.compose.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.math.LatexMathPlugin
-import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 
 class MyApplication : Application() {
   override fun onCreate() {
