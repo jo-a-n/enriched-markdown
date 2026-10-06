@@ -47,7 +47,7 @@ class MathBlockSegment : PluginBlockSegment<MathSegmentPayload> {
     val mathStyle = style.mathStyle(context)
     val renderer =
       runRaTeX(
-        onFailure = { error -> onPluginEvent?.emit(LatexErrorEvent(latex, error.message, displayMode = true)) },
+        onFailure = { error -> onPluginEvent?.emit(LatexError(latex, error.message, displayMode = true)) },
       ) {
         RaTeXFontLoader.ensureLoaded(context)
         val displayList = RaTeXEngine.parseBlocking(latex, displayMode = true, color = mathStyle.color)

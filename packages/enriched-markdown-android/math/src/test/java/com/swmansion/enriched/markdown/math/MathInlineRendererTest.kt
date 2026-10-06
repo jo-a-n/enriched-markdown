@@ -51,9 +51,9 @@ class MathInlineRendererTest {
 
   @Test
   fun aRejectedEquationIsReportedOnce() {
-    val events = mutableListOf<LatexErrorEvent>()
+    val events = mutableListOf<LatexError>()
 
-    render(document(paragraph(latexMathInline("\\pi r^2"))), onPluginEvent = { events += it as LatexErrorEvent })
+    render(document(paragraph(latexMathInline("\\pi r^2"))), onPluginEvent = { events += it as LatexError })
 
     assertEquals("\\pi r^2", events.single().source)
   }

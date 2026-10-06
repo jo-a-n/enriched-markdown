@@ -106,7 +106,7 @@ class MathInlineSpan private constructor(
     ): MathInlineSpan? {
       val renderer =
         runRaTeX(
-          onFailure = { error -> onPluginEvent?.emit(LatexErrorEvent(latex, error.message, displayMode)) },
+          onFailure = { error -> onPluginEvent?.emit(LatexError(latex, error.message, displayMode)) },
         ) {
           val displayList = RaTeXEngine.parseBlocking(latex, displayMode = false, color = textColor)
           RaTeXRenderer(displayList, fontSize) { RaTeXFontLoader.getTypeface(it) }

@@ -339,21 +339,21 @@ Miss any of the three and the math still reaches the screen, unrendered: with th
 literal text, and with the flag on but no plugin installed it is its own raw source, delimiters
 included, plus one warning in logcat.
 
-#### `onPluginEvent` and `LatexErrorEvent`
+#### `onPluginEvent` and `LatexError`
 
 Installed plugins report per-view problems through `onPluginEvent`, a single channel shared by
-every plugin rather than one callback per feature. The math plugin sends a `LatexErrorEvent` when
+every plugin rather than one callback per feature. The math plugin sends a `LatexError` when
 the engine cannot draw an expression (an unsupported command, a syntax error); the expression then
 shows as its raw source.
 
 ```kotlin
-import com.swmansion.enriched.markdown.math.LatexErrorEvent
+import com.swmansion.enriched.markdown.math.LatexError
 
 EnrichedMarkdownText(
   markdown = content,
   flags = Md4cFlags(latexMath = true),
   onPluginEvent = { event ->
-    if (event is LatexErrorEvent) {
+    if (event is LatexError) {
       Log.w("Latex", "${event.source} failed: ${event.message}")
     }
   },
@@ -361,7 +361,7 @@ EnrichedMarkdownText(
 ```
 
 ```kotlin
-data class LatexErrorEvent(
+data class LatexError(
   val source: String,       // the whole failing expression, without $ / $$ delimiters
   val message: String?,     // the engine's error, when it gave one
   val displayMode: Boolean, // false for inline $...$, true for block $$...$$

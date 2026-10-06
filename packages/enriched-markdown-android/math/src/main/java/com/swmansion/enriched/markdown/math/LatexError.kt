@@ -10,7 +10,7 @@ import com.swmansion.enriched.markdown.plugin.PluginEvent
  * A data class on purpose: core deduplicates events per view by equality, so streamed content that
  * re-renders the same broken expression on every token still reports it once.
  */
-data class LatexErrorEvent(
+data class LatexError(
   val source: String,
   val message: String?,
   val displayMode: Boolean,

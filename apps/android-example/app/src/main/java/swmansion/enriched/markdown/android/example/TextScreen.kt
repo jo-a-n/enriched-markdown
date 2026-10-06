@@ -18,7 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.swmansion.enriched.markdown.compose.EnrichedMarkdownText
 import com.swmansion.enriched.markdown.compose.Md4cFlags
-import com.swmansion.enriched.markdown.math.LatexErrorEvent
+import com.swmansion.enriched.markdown.math.LatexError
 
 @Composable
 fun TextScreen(
@@ -45,10 +45,10 @@ fun TextScreen(
           context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }
       },
-      // Plugins report per-view problems here; the math plugin sends a LatexErrorEvent for every
+      // Plugins report per-view problems here; the math plugin sends a LatexError for every
       // expression it could not draw, once per distinct expression per view.
       onPluginEvent = { event ->
-        if (event is LatexErrorEvent) {
+        if (event is LatexError) {
           Log.w(
             "ExampleLatex",
             "LaTeX failed (displayMode=${event.displayMode}): ${event.source} - ${event.message}",

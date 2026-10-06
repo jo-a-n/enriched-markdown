@@ -46,7 +46,7 @@ class RaTeXUnavailableTest {
 
     // Reported on the render thread, and there is no span to measure or draw.
     assertNull(span)
-    val event = sink.events.single() as LatexErrorEvent
+    val event = sink.events.single() as LatexError
     assertEquals("x^2", event.source)
     assertEquals(false, event.displayMode)
   }
@@ -56,7 +56,7 @@ class RaTeXUnavailableTest {
     val sink = RecordingSink()
     MathInlineSpan.layOut(latex = "x^2", fontSize = 16f, textColor = Color.BLACK, displayMode = true, onPluginEvent = sink)
 
-    assertEquals(true, (sink.events.single() as LatexErrorEvent).displayMode)
+    assertEquals(true, (sink.events.single() as LatexError).displayMode)
   }
 
   @Test
@@ -67,7 +67,7 @@ class RaTeXUnavailableTest {
     // Reported on the render thread, where the payload is built for every render, so a reused
     // view does not have to report it again.
     assertNull(payload!!.renderer)
-    val event = sink.events.single() as LatexErrorEvent
+    val event = sink.events.single() as LatexError
     assertEquals("E = mc^2", event.source)
     assertEquals(true, event.displayMode)
 
