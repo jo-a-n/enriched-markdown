@@ -357,7 +357,11 @@ turned off a reveal completes at once.
 
 **Showing the text through.** `drawText` draws the segment's text as it looks once revealed, each
 glyph where the text view draws it, so a blur, pixelation or scramble lines up with the real text as
-the overlay fades. It lays out the line each time, so cache what you make from it, as above.
+the overlay fades. It lays out the line each time, so cache what you make from it, as above. Call
+it on the main thread, as `draw` does: it lifts the spoiler's concealment while it draws, so a call
+from another thread could show the hidden text. For heavy work such as a blur, draw the text into a
+bitmap on the main thread, process the bitmap on another one, and call `host.invalidate()` when the
+result is ready.
 
 **No backdrop needed.** The concealed text is drawn transparent, emoji and inline images included,
 so an overlay can leave parts of the segment clear.

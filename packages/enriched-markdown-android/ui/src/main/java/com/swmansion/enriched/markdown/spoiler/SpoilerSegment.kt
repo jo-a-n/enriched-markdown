@@ -71,6 +71,12 @@ class SpoilerSegment internal constructor(
    * for effects that show the text through (a blur, pixelation). It lays out the whole line each
    * time, so cache the result until [width] or [height] changes. New content under the segment,
    * such as an image loading, comes with a new overlay.
+   *
+   * Call it on the main thread, as from [SpoilerSegmentOverlay.draw]. It lifts the spoiler's
+   * concealment while it draws, so a call from another thread could show the hidden text in the
+   * text view's own draw. For heavy work such as a blur, draw the text into a bitmap on the main
+   * thread, process the bitmap on another one, and call [SpoilerOverlayHost.invalidate] when the
+   * result is ready.
    */
   fun drawText(canvas: Canvas) {
     val layout = layout ?: return
