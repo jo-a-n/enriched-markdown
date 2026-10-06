@@ -5,7 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -115,7 +114,6 @@ class MathContainerView(
   }
 
   private fun showSource(error: Throwable?) {
-    Log.e(TAG, "Failed to render LaTeX", error)
     mathView.renderer = null
     mathView.fallbackText = "\$\$" + latex + "\$\$"
     mathView.fallbackColor = mathStyle.color
@@ -195,9 +193,5 @@ class MathContainerView(
       fallbackPaint.color = fallbackColor
       canvas.drawText(fallback, 0f, -fallbackPaint.fontMetrics.ascent, fallbackPaint)
     }
-  }
-
-  private companion object {
-    const val TAG = "MathContainerView"
   }
 }

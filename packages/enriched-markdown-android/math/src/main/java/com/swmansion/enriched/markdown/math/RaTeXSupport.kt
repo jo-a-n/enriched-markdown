@@ -1,5 +1,8 @@
 package com.swmansion.enriched.markdown.math
 
+import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
+
 /**
  * Runs [block], turning any RaTeX failure into [onFailure] and a null result.
  *
@@ -24,6 +27,21 @@ internal inline fun <T> runRaTeX(
     onFailure(e)
     null
   } catch (e: LinkageError) {
+    warnNativeLibraryUnavailable(e)
     onFailure(e)
     null
   }
+
+private val nativeLibraryWarningLogged = AtomicBoolean(false)
+
+/**
+ * Logs a [LinkageError] from [runRaTeX] once per process. Whether the native library loads is
+ * decided by the device's ABI, so after the first failure every equation fails the same way, and
+ * logging each one would only repeat it. A malformed expression is not logged at all: it is the
+ * content's problem rather than the app's, and plugins report it through `LatexErrorEvent`.
+ */
+internal fun warnNativeLibraryUnavailable(error: LinkageError) {
+  if (nativeLibraryWarningLogged.compareAndSet(false, true)) {
+    Log.w("RaTeX", "RaTeX native library is unavailable on this device; math renders as its source.", error)
+  }
+}
