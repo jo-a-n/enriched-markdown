@@ -41,13 +41,18 @@ internal class LatexSourceRenderer(
     val latex = latexSourceOf(node)
     if (latex.isEmpty()) return
 
+    // Display math promoted to a top-level node has no enclosing block, so it becomes a paragraph
+    // of its own: styled and spaced like one, rather than running into the next block.
+    val blockStyle = factory.blockStyleContext.currentBlockStyleOrNull()
+    if (blockStyle == null) {
+      val paragraph = MarkdownASTNode(MarkdownASTNode.NodeType.Paragraph, children = listOf(node))
+      factory.builtInRenderer(MarkdownASTNode.NodeType.Paragraph)?.render(paragraph, builder, onLinkPress, onLinkLongPress, factory)
+      return
+    }
+
     val delimiter = if (isDisplay) "$$" else "$"
     val start = builder.length
     builder.append(delimiter).append(latex).append(delimiter)
-
-    // Display math promoted to a top-level node has no enclosing block, so there is no style to
-    // inherit and the raw text stands on its own.
-    val blockStyle = factory.blockStyleContext.currentBlockStyleOrNull() ?: return
     builder.setSpan(
       TextSpan(blockStyle, factory.context),
       start,

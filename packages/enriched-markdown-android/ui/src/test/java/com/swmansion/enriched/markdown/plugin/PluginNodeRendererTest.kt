@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.renderer.NodeRenderer
 import com.swmansion.enriched.markdown.renderer.RendererFactory
+import com.swmansion.enriched.markdown.spans.TextSpan
 import com.swmansion.enriched.markdown.test.FakePlugin
 import com.swmansion.enriched.markdown.test.MarkdownRenderTestSupport.render
 import com.swmansion.enriched.markdown.test.TestAstFactory.document
@@ -58,6 +59,17 @@ class PluginNodeRendererTest {
     // Promoted to a top level node there is no enclosing block style to inherit; still no crash.
     val topLevel = render(document(latexMathDisplay("x^2"))).toString()
     assertEquals("\$\$x^2\$\$", topLevel)
+  }
+
+  /** A top-level equation is a block of its own, so the paragraph after it starts on a new line. */
+  @Test
+  fun withNoPluginTopLevelDisplayLatexIsAParagraphOfItsOwn() {
+    val rendered =
+      render(document(paragraph(text("Energy follows")), latexMathDisplay("E=mc^2"), paragraph(text("and this is why"))))
+
+    assertEquals("Energy follows\n\$\$E=mc^2\$\$\nand this is why", rendered.toString())
+    val sourceStart = rendered.indexOf("\$\$")
+    assertTrue(rendered.getSpans(sourceStart, sourceStart + 1, TextSpan::class.java).isNotEmpty())
   }
 
   @Test
