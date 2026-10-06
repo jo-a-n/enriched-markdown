@@ -5,6 +5,7 @@ import android.text.SpannableStringBuilder
 import androidx.test.core.app.ApplicationProvider
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode.NodeType
+import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.renderer.Renderer
 import com.swmansion.enriched.markdown.styles.StyleConfig
 
@@ -23,15 +24,18 @@ object MathTestSupport {
   fun render(
     document: MarkdownASTNode,
     style: StyleConfig = defaultStyle,
+    onPluginEvent: PluginEventSink? = null,
   ): SpannableStringBuilder {
     val renderer = Renderer()
-    renderer.configure(style, context)
+    renderer.configure(style, context, onPluginEvent = onPluginEvent)
     return renderer.renderDocument(document, null, null)
   }
 
   fun document(vararg children: MarkdownASTNode): MarkdownASTNode = MarkdownASTNode(NodeType.Document, children = children.toList())
 
   fun paragraph(vararg children: MarkdownASTNode): MarkdownASTNode = MarkdownASTNode(NodeType.Paragraph, children = children.toList())
+
+  fun spoiler(vararg children: MarkdownASTNode): MarkdownASTNode = MarkdownASTNode(NodeType.Spoiler, children = children.toList())
 
   fun text(content: String): MarkdownASTNode = MarkdownASTNode(NodeType.Text, content = content)
 

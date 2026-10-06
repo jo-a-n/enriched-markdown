@@ -3,15 +3,17 @@
 package com.swmansion.enriched.markdown.math
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.swmansion.enriched.markdown.math.test.MathTestSupport.defaultStyle
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.document
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexMathDisplay
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.latexMathInline
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.paragraph
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.render
+import com.swmansion.enriched.markdown.math.test.MathTestSupport.spoiler
 import com.swmansion.enriched.markdown.math.test.MathTestSupport.text
 import com.swmansion.enriched.markdown.plugin.EnrichedMarkdownPlugins
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
+import com.swmansion.enriched.markdown.spans.SpoilerSpan
+import com.swmansion.enriched.markdown.spans.TextSpan
 import com.swmansion.enriched.markdown.utils.text.conversion.MarkdownExtractor
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -22,8 +24,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The inline half of the plugin. The RaTeX engine cannot load under Robolectric, so the spans built
- * here all hold a failed layout and draw their source; what they carry is still checked.
+ * The inline half of the plugin. The RaTeX engine cannot load under Robolectric, so every equation
+ * here is one the engine rejects, which the renderer hands to core's source text instead of a span.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [28])
@@ -39,22 +41,31 @@ class MathInlineRendererTest {
   fun tearDown() = EnrichedMarkdownPlugins.reset()
 
   @Test
-  fun inlineMathRendersAsOneSpanOverTheObjectReplacementCharacter() {
+  fun aRejectedEquationIsCoresStyledSourceTextRatherThanASpan() {
     val styled = render(document(paragraph(text("Area: "), latexMathInline("\\pi r^2"))))
 
-    val span = styled.getSpans(0, styled.length, MathInlineSpan::class.java).single()
-
-    assertEquals("\\pi r^2", span.latex)
-    assertEquals("￼", styled.substring(styled.getSpanStart(span), styled.getSpanEnd(span)))
+    assertEquals(0, styled.getSpans(0, styled.length, MathInlineSpan::class.java).size)
+    assertEquals("Area: \$\\pi r^2\$", styled.toString())
+    assertTrue(styled.getSpans(6, styled.length, TextSpan::class.java).any { styled.getSpanStart(it) == 6 })
   }
 
   @Test
-  fun inlineMathFontSizeFollowsTheEnclosingBlock() {
-    val styled = render(document(paragraph(latexMathInline("x"))))
+  fun aRejectedEquationIsReportedOnce() {
+    val events = mutableListOf<LatexErrorEvent>()
 
-    val span = styled.getSpans(0, styled.length, MathInlineSpan::class.java).single()
+    render(document(paragraph(latexMathInline("\\pi r^2"))), onPluginEvent = { events += it as LatexErrorEvent })
 
-    assertEquals(defaultStyle.paragraphStyle.fontSize, span.fontSize, 0.01f)
+    assertEquals("\\pi r^2", events.single().source)
+  }
+
+  /** Being text, the fallback is concealed by the spoiler around it like any other text. */
+  @Test
+  fun aRejectedEquationInsideASpoilerIsConcealedWithIt() {
+    val styled = render(document(paragraph(spoiler(text("the answer is "), latexMathInline("x=42")))))
+
+    val spoilerSpan = styled.getSpans(0, styled.length, SpoilerSpan::class.java).single()
+
+    assertEquals("the answer is \$x=42\$", styled.substring(styled.getSpanStart(spoilerSpan), styled.getSpanEnd(spoilerSpan)))
   }
 
   @Test
@@ -67,9 +78,8 @@ class MathInlineRendererTest {
     assertEquals("Area: \$\\pi r^2\$", styled.toString())
   }
 
-  /** Core owns the extraction; the span owns the delimiters. */
   @Test
-  fun markdownExtractionWrapsInlineMathInDollarDelimiters() {
+  fun markdownExtractionOfARejectedEquationKeepsItsDollarDelimiters() {
     val styled = render(document(paragraph(text("Area: "), latexMathInline("\\pi r^2"))))
 
     val markdown = MarkdownExtractor.extractFromSpannable(styled, 0, styled.length)
@@ -77,24 +87,12 @@ class MathInlineRendererTest {
     assertEquals("Area: \$\\pi r^2\$", markdown)
   }
 
-  /** Typeset inline, but copied back out as the display math it was written as. */
   @Test
-  fun midLineDisplayMathKeepsItsDoubleDollarDelimiters() {
+  fun aRejectedMidLineDisplayEquationKeepsItsDoubleDollarDelimiters() {
     val styled = render(document(paragraph(text("Energy: "), latexMathDisplay("E = mc^2"))))
 
-    val span = styled.getSpans(0, styled.length, MathInlineSpan::class.java).single()
     val markdown = MarkdownExtractor.extractFromSpannable(styled, 0, styled.length)
 
-    assertTrue(span.displayMode)
     assertEquals("Energy: \$\$E = mc^2\$\$", markdown)
-  }
-
-  /** HTML export wraps this in core's inline-code styling, so the `$` must not be repeated here. */
-  @Test
-  fun htmlTextIsTheBareLatex() {
-    val span = MathInlineSpan.layOut(latex = "x^2", fontSize = 16f, textColor = 0)
-
-    assertEquals("x^2", span.toHtmlText())
-    assertEquals("\$x^2\$", span.toMarkdownSource())
   }
 }

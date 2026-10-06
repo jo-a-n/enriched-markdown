@@ -32,11 +32,11 @@ class MathInlineRenderer(
     val latex = latexSourceOf(node)
     if (latex.isBlank()) {
       // An unterminated `$$` mid-stream: core shows it as source instead of dropping it.
-      factory.builtInRenderer(node.type)?.render(node, builder, onLinkPress, onLinkLongPress, factory)
+      renderSource(node, builder, onLinkPress, onLinkLongPress, factory)
       return
     }
 
-    // A failure is left to the span, which reports it and draws its own source instead.
+    // A failure is left to layOut, which reports it.
     runRaTeX { RaTeXFontLoader.ensureLoaded(context) }
 
     // An inline equation sits on a line of the enclosing block and has to match its text. Display
@@ -44,9 +44,6 @@ class MathInlineRenderer(
     val fontSize =
       factory.blockStyleContext.currentBlockStyleOrNull()?.fontSize
         ?: blockFontSize
-
-    val start = builder.length
-    builder.append(OBJECT_REPLACEMENT_CHARACTER)
 
     val span =
       MathInlineSpan.layOut(
@@ -56,8 +53,24 @@ class MathInlineRenderer(
         displayMode = node.type == MarkdownASTNode.NodeType.LatexMathDisplay,
         onPluginEvent = config.onPluginEvent,
       )
+    if (span == null) {
+      renderSource(node, builder, onLinkPress, onLinkLongPress, factory)
+      return
+    }
 
+    val start = builder.length
+    builder.append(OBJECT_REPLACEMENT_CHARACTER)
     builder.setSpan(span, start, builder.length, SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE)
+  }
+
+  private fun renderSource(
+    node: MarkdownASTNode,
+    builder: SpannableStringBuilder,
+    onLinkPress: ((String) -> Unit)?,
+    onLinkLongPress: ((String) -> Unit)?,
+    factory: RendererFactory,
+  ) {
+    factory.builtInRenderer(node.type)?.render(node, builder, onLinkPress, onLinkLongPress, factory)
   }
 
   private companion object {

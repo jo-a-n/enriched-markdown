@@ -1,3 +1,5 @@
+@file:OptIn(InternalPluginApi::class)
+
 package com.swmansion.enriched.markdown.spans
 
 import android.graphics.Canvas
@@ -6,6 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.text.Spanned
 import android.text.style.LineBackgroundSpan
+import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.spoiler.colorWithAlpha
 import com.swmansion.enriched.markdown.spoiler.spoilerTextAlpha
 import com.swmansion.enriched.markdown.styles.StyleConfig
