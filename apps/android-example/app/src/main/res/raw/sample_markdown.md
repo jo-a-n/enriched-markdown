@@ -111,6 +111,28 @@ The largest terrestrial biome, spanning across **Northern Russia, Canada, and Sc
 
 ---
 
+## Field Notes
+
+> [!NOTE]
+> Forest cover figures come from the FAO *Global Forest Resources Assessment*, published every five
+> years.
+
+> [!TIP]
+> Visit a temperate forest in **autumn** — the canopy thins and the understory becomes visible for
+> the first time all year.
+
+> [!IMPORTANT]
+> Always check local fire restrictions before entering `dry season` woodland.
+
+> [!WARNING]
+> Never remove deadwood from a protected forest. It hosts more species than the living canopy does.
+
+> [!CAUTION]
+> Some bristlecone pines are over *4,850 years old*. Touching the exposed heartwood damages growth
+> rings that took millennia to form.
+
+---
+
 ## Spoiler Examples
 
 Try tapping the hidden text below to reveal it:
@@ -139,6 +161,16 @@ Mathematical and scientific notation using superscripts and subscripts:
 Footnote-style references^1^ and trademark symbols like React Native^™^ can also use superscripts.
 
 Scientific prefixes: 6.022 × 10^23^ (Avogadro's number), the universe is approximately 1.38 × 10^10^ years old.
+
+---
+
+## Highlight Examples
+
+Mark the parts that matter with ==double equals==.
+
+- A single ==highlighted phrase== inside a list item
+- Highlight combined with ==**bold**== and ==*italic*== text
+- Highlight around a ==[link](https://swmansion.com)==
 
 ---
 

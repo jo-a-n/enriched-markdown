@@ -8,11 +8,38 @@ import android.util.TypedValue
 import android.view.View
 import com.swmansion.enriched.markdown.EnrichedMarkdownInternalText
 import com.swmansion.enriched.markdown.accessibility.AccessibilityLabels
+import com.swmansion.enriched.markdown.math.LatexErrorReporter
+import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.utils.common.BreakStrategyUtils
 import com.swmansion.enriched.markdown.utils.common.FeatureFlags
 import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfig
 import com.swmansion.enriched.markdown.utils.text.view.applySelectionColors
+
+/**
+ * Runtime-mutable block props that a prop update can flip WITHOUT recreating the
+ * segment tree (the reconcile path, reset = false): the block context-menu gate,
+ * the code-block tap gate, the copy menu labels, and the copy/tap callbacks.
+ *
+ * The root owns one instance and mutates it in place; every view down the tree
+ * holds the same reference (SegmentViewConfig.dynamicProps) and reads a field at use-time
+ * (menu-open, tap). That single shared box is the source of truth, so a view
+ * created after a toggle (e.g. a code block added to a blockquote once
+ * onCodeBlockPress is on) is born current instead of from a stale snapshot, and
+ * no per-toggle push into existing views is needed. See issues #768 and #822.
+ *
+ * Only props read at interaction-time, with no layout/draw dependency, belong
+ * here; anything that rebuilds the tree on change stays an immutable field on
+ * SegmentViewConfig, where a snapshot can never go stale.
+ */
+class DynamicBlockProps {
+  var enableBlockContextMenu: Boolean = true
+  var enableCodeBlockPress: Boolean = false
+  var copyLabel: String = ""
+  var copyAsMarkdownLabel: String = ""
+  var onCopyPress: ((code: String, language: String) -> Unit)? = null
+  var onCodeBlockPress: ((code: String, language: String) -> Unit)? = null
+}
 
 /**
  * Configuration shared by every ContainerNodeView's SegmentViewFactory so that
@@ -22,6 +49,10 @@ import com.swmansion.enriched.markdown.utils.text.view.applySelectionColors
  * The root supplies the full wiring; a nested blockquote supplies the subset it
  * needs (styling, link/copy callbacks, accessibility labels) and treats
  * streaming as static.
+ *
+ * Everything here is a fixed-for-the-view's-life value: changing any of it
+ * recreates the tree (see EnrichedMarkdown.setMarkdownStyle et al.), so a
+ * snapshot never goes stale. The runtime-mutable block props live in [dynamicProps].
  */
 data class SegmentViewConfig(
   val context: Context,
@@ -35,12 +66,12 @@ data class SegmentViewConfig(
   val selectionColor: Int?,
   val selectionHandleColor: Int?,
   val contextMenuItemTexts: List<String>,
-  val enableBlockContextMenu: Boolean,
+  val dynamicProps: DynamicBlockProps,
   val onLinkPress: ((String) -> Unit)?,
   val onLinkLongPress: ((String) -> Unit)?,
-  val onCopyPress: ((code: String, language: String) -> Unit)?,
   val onTaskListItemPress: ((taskIndex: Int, checked: Boolean, itemText: String) -> Unit)?,
   val onContextMenuItemPress: ((itemText: String, selectedText: String, selectionStart: Int, selectionEnd: Int) -> Unit)?,
+  val onLatexError: LatexErrorReporter? = null,
 )
 
 /**
@@ -100,14 +131,12 @@ object SegmentViewCreators {
     segment: RenderedSegment.Table,
     config: SegmentViewConfig,
   ) = TableContainerView(config.context, config.style).apply {
-    enableBlockContextMenu = config.enableBlockContextMenu
+    dynamicProps = config.dynamicProps
     allowFontScaling = config.allowFontScaling
     maxFontSizeMultiplier = config.maxFontSizeMultiplier
     accessibilityLabels = config.accessibilityLabels
     onLinkPress = config.onLinkPress
     onLinkLongPress = config.onLinkLongPress
-    copyLabel = config.selectionMenuConfig.copyLabel
-    copyAsMarkdownLabel = config.selectionMenuConfig.copyAsMarkdownLabel
     applyTableNode(segment.node)
   }
 
@@ -115,10 +144,7 @@ object SegmentViewCreators {
     segment: RenderedSegment.CodeBlock,
     config: SegmentViewConfig,
   ) = CodeBlockContainerView(config.context, config.style).apply {
-    enableBlockContextMenu = config.enableBlockContextMenu
-    copyLabel = config.selectionMenuConfig.copyLabel
-    copyAsMarkdownLabel = config.selectionMenuConfig.copyAsMarkdownLabel
-    onCopyPress = { code, language -> config.onCopyPress?.invoke(code, language) }
+    dynamicProps = config.dynamicProps
     applyCodeBlockNode(segment.node)
   }
 
@@ -154,14 +180,13 @@ object SegmentViewCreators {
           .invoke(view, config.accessibilityLabels)
       }
       resolvedClass
-        .getMethod("setCopyLabel", String::class.java)
-        .invoke(view, config.selectionMenuConfig.copyLabel)
-      resolvedClass
-        .getMethod("setCopyAsMarkdownLabel", String::class.java)
-        .invoke(view, config.selectionMenuConfig.copyAsMarkdownLabel)
-      resolvedClass
-        .getMethod("setEnableBlockContextMenu", Boolean::class.javaPrimitiveType)
-        .invoke(view, config.enableBlockContextMenu)
+        .getMethod("setDynamicProps", DynamicBlockProps::class.java)
+        .invoke(view, config.dynamicProps)
+      runCatching {
+        resolvedClass
+          .getMethod("setOnLatexError", LatexErrorReporter::class.java)
+          .invoke(view, config.onLatexError)
+      }
       resolvedClass.getMethod("applyLatex", String::class.java).invoke(view, segment.latex)
       view
     } catch (e: Exception) {
@@ -183,9 +208,51 @@ object SegmentViewCreators {
     segment: RenderedSegment.Blockquote,
     config: SegmentViewConfig,
   ) = BlockquoteContainerView(config.context, config).apply {
-    enableBlockContextMenu = config.enableBlockContextMenu
-    copyLabel = config.selectionMenuConfig.copyLabel
-    copyAsMarkdownLabel = config.selectionMenuConfig.copyAsMarkdownLabel
     applyBlockquoteNode(segment.node)
+  }
+
+  private val cachedVideoContainerClass: Class<*>? by lazy {
+    try {
+      Class.forName("com.swmansion.enriched.markdown.segments.VideoContainerView")
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  fun videoContainerClass(): Class<*>? = cachedVideoContainerClass
+
+  fun isVideoContainerView(view: View): Boolean = cachedVideoContainerClass?.isInstance(view) == true
+
+  fun createVideoView(
+    segment: RenderedSegment.Video,
+    config: SegmentViewConfig,
+  ): View {
+    val resolvedClass = videoContainerClass()
+    if (!FeatureFlags.IS_VIDEO_ENABLED || resolvedClass == null) return View(config.context)
+    return try {
+      val view =
+        resolvedClass
+          .getConstructor(Context::class.java, StyleConfig::class.java)
+          .newInstance(config.context, config.style) as View
+      resolvedClass
+        .getMethod("setDynamicProps", DynamicBlockProps::class.java)
+        .invoke(view, config.dynamicProps)
+      resolvedClass
+        .getMethod("applyVideoNode", MarkdownASTNode::class.java)
+        .invoke(view, segment.node)
+      view
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to create video view", e)
+      View(config.context)
+    }
+  }
+
+  fun updateVideoView(
+    view: View,
+    segment: RenderedSegment.Video,
+  ) {
+    videoContainerClass()
+      ?.getMethod("applyVideoNode", MarkdownASTNode::class.java)
+      ?.invoke(view, segment.node)
   }
 }

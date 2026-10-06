@@ -142,6 +142,44 @@ Scientific prefixes: 6.022 × 10^23^ (Avogadro's number), the universe is approx
 
 ---
 
+## Highlight
+
+Use ==double equals== to highlight text, and ==**combine it** with other styles== when a phrase needs to stand out.
+
+---
+
+## Admonitions
+
+GitHub-style alerts are blockquotes that open with a type marker:
+
+> [!NOTE]
+> Highlights information that users should take into account, even when skimming.
+
+> [!TIP]
+> Optional information to help a user be more successful.
+
+> [!IMPORTANT]
+> Key information users need to know to achieve their goal.
+
+> [!WARNING]
+> Urgent info that needs immediate user attention to avoid problems.
+
+> [!CAUTION]
+> Advises about risks or negative outcomes of certain actions.
+
+> [!IMPORTANT]
+> An alert can hold **formatted** text, a [link](https://swmansion.com), and other blocks:
+>
+> - first bullet
+> - second bullet
+>
+> > A plain quote nested inside keeps the alert's bar beside its own.
+>
+> > [!TIP]
+> > A tip nested inside the alert gets its own header.
+
+---
+
 ## Fascinating Forest Facts
 
 Did you know that trees communicate through an underground network? Scientists call this the `Wood Wide Web` — a fungal network connecting tree roots across entire forests.
@@ -391,6 +429,25 @@ A longer RTL paragraph to exercise line wrapping and measurement:
 > هذه فقرة طويلة باللغة العربية تهدف إلى اختبار كيفية تعامل المكوّن مع التفاف الأسطر والقياس عندما يكون النص طويلاً بما يكفي ليمتد عبر عدّة أسطر، مع وجود **تنسيق غامق** و*مائل* و[رابط](https://example.com) داخل النص.
 
 זוהי פסקה ארוכה בעברית שמטרתה לבדוק את אופן הטיפול בשבירת שורות ובמדידה כאשר הטקסט ארוך מספיק כדי להתפרס על פני מספר שורות, עם **טקסט מודגש** ו*נטוי* ו[קישור](https://example.com) בתוך הפסקה.
+
+Lists, task lists, admonitions, and tables place their chrome on the side of each paragraph's direction:
+
+- الغابات المطيرة
+- الغابات الشمالية
+  1. الصنوبر
+  2. التنوب
+- Temperate forests
+
+- [ ] ازرع شجرة
+- [x] ادعم الحفاظ على الغابات
+
+> [!TIP]
+> الغابات تنظم دورة المياه وتحمي التربة من التآكل.
+
+| النوع | المساحة |
+|---|---|
+| مطيرة | 13% |
+| Boreal | 27% |
 
 ---
 

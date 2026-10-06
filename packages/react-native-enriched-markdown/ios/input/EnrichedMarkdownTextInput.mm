@@ -20,6 +20,7 @@
 #import "ENRMInputTypingAttributesController.h"
 #import "ENRMLinkCoordinator.h"
 #import "ENRMLinkRegexConfig.h"
+#import "ENRMMarkdownShortcutMatcher.h"
 #import "ENRMMentionCoordinator.h"
 #import "ENRMStyleHandler.h"
 #import "ENRMStyleMergingConfig.h"
@@ -60,11 +61,17 @@ using namespace facebook::react;
 - (void)setupTextView;
 - (void)applyFormatting;
 - (void)applyFormattingScopedToEditAtLocation:(NSUInteger)editLocation insertedLength:(NSUInteger)insertedLength;
+- (void)applyFormattingScopedFromParagraphAtLocation:(NSUInteger)editLocation;
 - (void)toggleInlineStyle:(ENRMInputStyleType)styleType;
 - (void)resetBaseTypingAttributes;
 @end
 
 static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
+
+/// How long a consumed link press keeps suppressing the focus command. Long
+/// enough to cover the JS round trip that pressability's own onPress makes for
+/// the same tap, short enough that a later programmatic focus still lands.
+static const NSTimeInterval kENRMLinkPressFocusSuppressWindow = 0.5;
 
 @implementation EnrichedMarkdownTextInput {
   ENRMPlatformTextView *_textView;
@@ -112,12 +119,14 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
   ENRMClipboardCoordinator *_clipboardCoordinator;
 
   BOOL _isOnLinkPressSet;
+  CFTimeInterval _linkPressConsumedTime;
 #if !TARGET_OS_OSX
   CGPoint _touchDownPoint;
   CFTimeInterval _touchDownTime;
   BOOL _isLinkTapCandidate;
 #endif
 
+  ENRMMarkdownShortcutsConfig _markdownShortcutsConfig;
   ENRMWritingDirectionMode _writingDirectionMode;
   NSWritingDirection _resolvedLayoutDirection;
 
@@ -389,6 +398,14 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
   if (newViewProps.editable != oldViewProps.editable) {
     _textView.editable = newViewProps.editable;
   }
+
+  // Copied unconditionally: the generated struct only has `operator==` under
+  // RN_SERIALIZABLE_STATE, and three BOOLs are cheaper than the comparison.
+  _markdownShortcutsConfig = (ENRMMarkdownShortcutsConfig){
+      .heading = newViewProps.markdownShortcuts.heading,
+      .unorderedList = newViewProps.markdownShortcuts.unorderedList,
+      .orderedList = newViewProps.markdownShortcuts.orderedList,
+  };
 
 #if !TARGET_OS_OSX
   if (newViewProps.scrollEnabled != oldViewProps.scrollEnabled) {
@@ -831,6 +848,26 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
   [self applyFormattingScopedToRange:scope];
 }
 
+/// Newline variant: a newline can only restructure the paragraph it lands in and
+/// blocks below it, never content above. Scoping from the edit's paragraph start
+/// to the end of the text leaves paragraphs above untouched (issue #739). A
+/// backspace-merge is covered because editLocation lands at the merge point,
+/// whose paragraph range extends back over the joined previous line.
+- (void)applyFormattingScopedFromParagraphAtLocation:(NSUInteger)editLocation
+{
+  NSString *plainText = ENRMGetPlainText(_textView);
+  NSUInteger textLength = plainText.length;
+  if (textLength == 0) {
+    [self applyFormatting];
+    return;
+  }
+
+  NSUInteger location = MIN(editLocation, textLength);
+  NSRange paragraph = [plainText paragraphRangeForRange:NSMakeRange(location, 0)];
+  NSRange scope = NSMakeRange(paragraph.location, textLength - paragraph.location);
+  [self applyFormattingScopedToRange:scope];
+}
+
 - (void)applyFormattingScopedToRange:(NSRange)scope
 {
   if (_editSession.shouldSuppressFormatting) {
@@ -872,8 +909,16 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
 
 #pragma mark - Commands
 
+/// A tap consumed as an unfocused link press must not focus the input, but JS
+/// pressability still runs its own `onPress` for that same tap and calls
+/// TextInputState.focusTextInput, which lands here after the native veto has
+/// already passed. Suppressing for a short window after the press drops that
+/// one command without stranding later programmatic focus calls.
 - (void)focus
 {
+  if (_linkPressConsumedTime > 0 && CACurrentMediaTime() - _linkPressConsumedTime < kENRMLinkPressFocusSuppressWindow) {
+    return;
+  }
   ENRMFocusTextView(_textView);
 }
 
@@ -1615,6 +1660,7 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
   _touchDownPoint = point;
   _touchDownTime = CACurrentMediaTime();
   _isLinkTapCandidate = _isOnLinkPressSet && ![_textView isFirstResponder];
+  _linkPressConsumedTime = 0;
 }
 
 // UITextView's internal tap recognizers cannot be reliably beaten with gesture
@@ -1635,6 +1681,7 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
   if (url == nil) {
     return NO;
   }
+  _linkPressConsumedTime = CACurrentMediaTime();
   [self emitOnLinkPress:url];
   return YES;
 }
@@ -1643,6 +1690,7 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
 
 - (BOOL)handleLinkPressForMouseDownEvent:(NSEvent *)event
 {
+  _linkPressConsumedTime = 0;
   if (!_isOnLinkPressSet) {
     return NO;
   }
@@ -1651,6 +1699,7 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
   if (url == nil) {
     return NO;
   }
+  _linkPressConsumedTime = CACurrentMediaTime();
   [self emitOnLinkPress:url];
   return YES;
 }
@@ -1658,6 +1707,78 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
 #endif
 
 #pragma mark - Text edit tracking
+
+/// Markdown shortcuts: when the user types a space after `#`…`######`,
+/// `-`/`*`/`+` or `1.`/`1)` at the start of a plain paragraph, drop the prefix
+/// and make the paragraph that block. Runs after the stores are adjusted for the
+/// edit and before scoped formatting. Returns YES when it converted, in which
+/// case the replace path has already reformatted and emitted.
+- (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
+                                 deletedLength:(NSUInteger)deletedLength
+                                insertedLength:(NSUInteger)insertedLength
+{
+  // A typing affordance, not a paste/import path: pure insertions only, which
+  // is also how block continuation gates itself.
+  if (!ENRMMarkdownShortcutsEnabled(_markdownShortcutsConfig) || deletedLength != 0 || insertedLength == 0) {
+    return NO;
+  }
+
+  NSString *text = ENRMGetPlainText(_textView);
+  if (editLocation >= text.length) {
+    return NO;
+  }
+  NSUInteger insertedEnd = MIN(editLocation + insertedLength, text.length);
+
+  // The trigger is the first space inside the inserted run — a single
+  // keystroke in the common case, a whole token when an automation inserts
+  // several characters at once. A line break ends the search so the converted
+  // line is always the one the insertion started on.
+  NSCharacterSet *newlines = [NSCharacterSet newlineCharacterSet];
+  NSUInteger spaceIndex = NSNotFound;
+  for (NSUInteger i = editLocation; i < insertedEnd; i++) {
+    unichar c = [text characterAtIndex:i];
+    if (c == ' ') {
+      spaceIndex = i;
+      break;
+    }
+    if ([newlines characterIsMember:c]) {
+      return NO;
+    }
+  }
+  if (spaceIndex == NSNotFound) {
+    return NO;
+  }
+
+  NSUInteger lineStart = [text paragraphRangeForRange:NSMakeRange(spaceIndex, 0)].location;
+  if (spaceIndex == lineStart || [_blockCoordinator blockAtPosition:lineStart inText:text] != nil) {
+    return NO;
+  }
+
+  NSString *prefix = [text substringWithRange:NSMakeRange(lineStart, spaceIndex - lineStart)];
+  ENRMInputBlockType type = ENRMInputBlockTypeParagraph;
+  NSInteger level = 0;
+  if (![ENRMMarkdownShortcutMatcher matchPrefix:prefix config:_markdownShortcutsConfig outType:&type outLevel:&level]) {
+    return NO;
+  }
+
+  NSRange prefixRange = NSMakeRange(lineStart, spaceIndex + 1 - lineStart);
+  NSRange caretBefore = _textView.selectedRange;
+
+  // A zero-length range at the line start: the store expands it to the whole
+  // paragraph, and on an emptied line it persists as the block's anchor.
+  ENRMBlockRange *block = [ENRMBlockRange rangeWithType:type range:NSMakeRange(0, 0) level:level];
+  [self replaceTextInRange:prefixRange withText:@"" formattingRanges:@[] blockRanges:@[ block ]];
+
+  if (caretBefore.location >= NSMaxRange(prefixRange)) {
+    NSUInteger caret = caretBefore.location - prefixRange.length;
+    _textView.selectedRange = NSMakeRange(MIN(caret, ENRMGetPlainText(_textView).length), 0);
+  }
+  _lastSelectedRange = _textView.selectedRange;
+
+  [_typingController syncWithCursorBlock];
+  [self updateEmptyBulletMarker];
+  return YES;
+}
 
 - (void)handleTextChanged
 {
@@ -1711,6 +1832,14 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
 
   _lastTextLength = newLength;
 
+  // A typed markdown prefix turns the paragraph into a block; the replace path
+  // reformats and emits on its own, so the rest of this pass is redundant.
+  if ([self applyMarkdownShortcutForEditAtLocation:editLocation
+                                     deletedLength:deletedLength
+                                    insertedLength:insertedLength]) {
+    return;
+  }
+
 #if !TARGET_OS_OSX
   if (newLength == 0) {
     if ([self headingLevelForCursorParagraph] > 0 || [self listBlockForCursorParagraph] != nil) {
@@ -1722,7 +1851,7 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
 #endif
 
   if (touchedNewline) {
-    [self applyFormatting];
+    [self applyFormattingScopedFromParagraphAtLocation:editLocation];
   } else {
     [self applyFormattingScopedToEditAtLocation:editLocation insertedLength:insertedLength];
   }

@@ -11,6 +11,12 @@ NSLineBreakStrategy ENRMResolveLineBreakStrategy(NSString *_Nullable strategy);
 void ENRMApplyLineBreakStrategyToParagraphStyles(NSMutableAttributedString *output,
                                                  NSLineBreakStrategy lineBreakStrategy);
 
+/// Resolves an ellipsizeMode prop value to the NSLineBreakMode used for
+/// truncation on the text container (with maximumNumberOfLines). 'clip' maps to
+/// NSLineBreakByClipping (truncate with no ellipsis). Defaults to tail. Mirrors
+/// React Native Text's ellipsizeMode.
+NSLineBreakMode ENRMResolveEllipsizeLineBreakMode(NSString *_Nullable mode);
+
 /// Auto/LTR/RTL match React Native's writingDirection prop.
 /// FirstStrong is the library extension: resolve each paragraph from its first strong
 /// directional character (matches Android's TEXT_DIRECTION_FIRST_STRONG).
@@ -44,12 +50,25 @@ NSUInteger applyParagraphSpacingBefore(NSMutableAttributedString *output, NSRang
 NSUInteger applyBlockSpacingBefore(NSMutableAttributedString *output, NSUInteger insertionPoint, CGFloat marginTop);
 void applyBlockSpacingAfter(NSMutableAttributedString *output, CGFloat marginBottom);
 void applyLineHeight(NSMutableAttributedString *output, NSRange range, CGFloat lineHeight);
-void applyBaselineOffset(NSMutableAttributedString *output, NSRange range);
 
-/// True when the range contains a block (non-inline) image attachment. Lines holding
-/// such attachments must not be clamped by maximumLineHeight or the image box
-/// overflows the line and paints over surrounding content.
-BOOL ENRMRangeContainsBlockImage(NSAttributedString *output, NSRange range);
+/// Stamps every styled run in `range` with `NSOriginalFont` set to its own
+/// `NSFont`, so a line is sized from the font the renderer chose rather than
+/// from whichever font ends up drawing the glyphs.
+///
+/// UIKit writes this attribute itself, but only into a UITextView's storage, so
+/// the view-free measurement stack never saw it and sized a line from the
+/// fallback font instead. Stamping it here keeps measuring and rendering agreed.
+///
+/// IMPORTANT:
+/// Call this last, after every font in the range is final, on any attributed
+/// string handed to a layout engine. A run whose `NSFont` changes after the
+/// stamp is then sized from the stale font, in the measurement stack and in
+/// `UITextView` alike, so the line comes out wrong in both.
+/// `ENRMRenderASTNodes` and `ENRMRenderBlockquoteContentNodes` cover everything
+/// built through the node renderers; the two paths that assemble their own
+/// string (table cells, code block content) call it themselves.
+void ENRMPinLineMetricsToStyledFonts(NSMutableAttributedString *output, NSRange range);
+void applyBaselineOffset(NSMutableAttributedString *output, NSRange range);
 void applyTextAlignment(NSMutableAttributedString *output, NSRange range, NSTextAlignment textAlign);
 NSTextAlignment textAlignmentFromString(NSString *textAlign);
 

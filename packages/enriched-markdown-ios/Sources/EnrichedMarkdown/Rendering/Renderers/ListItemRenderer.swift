@@ -2,9 +2,9 @@ import UIKit
 
 final class ListItemRenderer: NodeRenderer {
     private let factory: RendererFactory
-    private let config: MarkdownStyleConfig
+    private let config: MarkdownStyleConfiguration
 
-    init(factory: RendererFactory, config: MarkdownStyleConfig) {
+    init(factory: RendererFactory, config: MarkdownStyleConfiguration) {
         self.factory = factory
         self.config = config
     }
@@ -33,9 +33,9 @@ final class ListItemRenderer: NodeRenderer {
             ? effectiveTaskMarkerWidth(for: context.listType)
             : effectiveMarkerWidth(for: context.listType)
         let gapWidth = max(config.list.gapWidth ?? 12, 4)
-        let marginLeft = config.list.marginLeft ?? 24
+        let marginLeading = config.list.marginLeading ?? 24
         let blockquoteIndent = CGFloat(context.blockquoteDepth) * blockquoteLevelSpacing()
-        let totalIndent = blockquoteIndent + baseMarkerWidth + gapWidth + (CGFloat(nestingLevel) * marginLeft)
+        let totalIndent = blockquoteIndent + baseMarkerWidth + gapWidth + (CGFloat(nestingLevel) * marginLeading)
         let lineHeight = config.list.lineHeight ?? 0
 
         let metadata: [NSAttributedString.Key: Any] = [
@@ -150,9 +150,13 @@ final class ListItemRenderer: NodeRenderer {
             let paragraphRange = string.paragraphRange(for: NSRange(location: location, length: 0))
             let applyRange = NSIntersectionRange(paragraphRange, itemRange)
             guard applyRange.length > 0 else { break }
+            location = NSMaxRange(applyRange)
 
+            if output.attribute(MarkdownAttribute.blockquoteDepth, at: applyRange.location, effectiveRange: nil) != nil {
+                shiftQuoteParagraph(in: output, range: applyRange, by: totalIndent)
+                continue
+            }
             if shouldSkipListStyling(in: output, range: applyRange, nestingLevel: nestingLevel) {
-                location = NSMaxRange(applyRange)
                 continue
             }
 
@@ -172,28 +176,41 @@ final class ListItemRenderer: NodeRenderer {
             if lineHeight > 0 {
                 ParagraphStyleHelpers.applyBaselineOffset(to: output, range: applyRange)
             }
-
-            location = NSMaxRange(applyRange)
         }
     }
 
+    /// A quote inside the item keeps its own attributes and indent, moved
+    /// into the item's text column together with its bars.
+    private func shiftQuoteParagraph(in output: NSMutableAttributedString, range: NSRange, by offset: CGFloat) {
+        let style = ParagraphStyleHelpers.getOrCreateParagraphStyle(in: output, at: range.location)
+        style.firstLineHeadIndent += offset
+        style.headIndent += offset
+        output.addAttributes(
+            [.paragraphStyle: style, MarkdownAttribute.blockquoteBarOffset: offset],
+            range: range
+        )
+    }
+
+    /// Nested lists, code blocks, quotes, and spacer lines are not the
+    /// item's own text.
     private func shouldSkipListStyling(
         in output: NSMutableAttributedString,
         range: NSRange,
         nestingLevel: Int
     ) -> Bool {
-        if let depth = MarkdownAttributeValue.intValue(
-            from: output.attribute(MarkdownAttribute.listDepth, at: range.location, effectiveRange: nil)
-        ), depth > nestingLevel {
+        let attrs = output.attributes(at: range.location, effectiveRange: nil)
+        if let depth = MarkdownAttributeValue.intValue(from: attrs[MarkdownAttribute.listDepth]), depth > nestingLevel {
             return true
         }
-
-        if MarkdownAttributeValue.boolValue(
-            from: output.attribute(MarkdownAttribute.codeBlock, at: range.location, effectiveRange: nil)
-        ) {
+        if MarkdownAttributeValue.boolValue(from: attrs[MarkdownAttribute.codeBlock]) {
             return true
         }
-
-        return false
+        if attrs[MarkdownAttribute.blockquoteDepth] != nil {
+            return true
+        }
+        // Read in place: bridging `output.string` copies the document.
+        return output.mutableString.rangeOfCharacter(from: Self.nonNewlines, options: [], range: range).location == NSNotFound
     }
+
+    private static let nonNewlines = CharacterSet.newlines.inverted
 }

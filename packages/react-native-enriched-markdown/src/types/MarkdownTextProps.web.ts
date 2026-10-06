@@ -5,12 +5,18 @@ import type {
   LinkLongPressEvent,
   ImagePressEvent,
   TaskListItemPressEvent,
+  CodeBlockPressEvent,
 } from './events';
 
 export interface EnrichedMarkdownTextProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   'style' | 'dir'
 > {
+  /**
+   * Test identifier applied to the root element as `data-testid`.
+   * @platform web
+   */
+  testID?: string;
   /**
    * Markdown content to render.
    * @platform ios, android, web
@@ -71,6 +77,13 @@ export interface EnrichedMarkdownTextProps extends Omit<
    * @platform ios, android, web
    */
   onTaskListItemPress?: (event: TaskListItemPressEvent) => void;
+  /**
+   * Callback fired when a fenced code block is clicked. Receives the block's
+   * `code` and `language`. The block is focusable and keyboard-activatable
+   * (Enter/Space); clicking while text is selected does not fire.
+   * @platform ios, android, web
+   */
+  onCodeBlockPress?: (event: CodeBlockPressEvent) => void;
   /**
    * Controls whether tapping a task list checkbox toggles its checked state.
    *

@@ -11,11 +11,13 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.uimanager.StateWrapper
 import com.swmansion.enriched.markdown.accessibility.AccessibilityLabels
+import com.swmansion.enriched.markdown.math.LatexErrorReporter
 import com.swmansion.enriched.markdown.parser.Md4cFlags
 import com.swmansion.enriched.markdown.parser.Parser
 import com.swmansion.enriched.markdown.segments.BlockquoteContainerView
 import com.swmansion.enriched.markdown.segments.CodeBlockContainerView
 import com.swmansion.enriched.markdown.segments.ContainerNodeView
+import com.swmansion.enriched.markdown.segments.DynamicBlockProps
 import com.swmansion.enriched.markdown.segments.MarkdownSegmentRenderer
 import com.swmansion.enriched.markdown.segments.RenderedSegment
 import com.swmansion.enriched.markdown.segments.SegmentViewConfig
@@ -52,6 +54,7 @@ class EnrichedMarkdown(
   private val mainHandler = Handler(Looper.getMainLooper())
   private val executor: ExecutorService = Executors.newSingleThreadExecutor()
   private val mathContainerClass: Class<*>? by lazy { SegmentViewCreators.mathContainerClass() }
+  private val videoContainerClass: Class<*>? by lazy { SegmentViewCreators.videoContainerClass() }
 
   private var currentRenderId = 0L
   private val dirtyFlags = EnumSet.noneOf(DirtyFlag::class.java)
@@ -90,7 +93,17 @@ class EnrichedMarkdown(
   private var onLinkPressCallback: ((String) -> Unit)? = null
   private var onLinkLongPressCallback: ((String) -> Unit)? = null
   private var onTaskListItemPressCallback: ((Int, Boolean, String) -> Unit)? = null
-  private var onCopyPressCallback: ((String, String) -> Unit)? = null
+  private var onLatexErrorCallback: LatexErrorReporter? = null
+
+  private val reportedLatexErrors = HashSet<String>()
+
+  private val latexErrorReporter =
+    LatexErrorReporter { source, message, displayMode ->
+      val key = (if (displayMode) "B " else "I ") + source
+      if (reportedLatexErrors.add(key)) {
+        onLatexErrorCallback?.report(source, message, displayMode)
+      }
+    }
   private var contextMenuItemTexts: List<String> = emptyList()
   var onContextMenuItemPressCallback: ((itemText: String, selectedText: String, selectionStart: Int, selectionEnd: Int) -> Unit)? = null
   var spoilerOverlay: SpoilerOverlay = SpoilerOverlay.PARTICLES
@@ -109,11 +122,18 @@ class EnrichedMarkdown(
         it.enableTaskListItemToggle = value
       }
     }
-  var enableBlockContextMenu: Boolean = true
+
+  private val dynamicProps = DynamicBlockProps()
+
+  var enableBlockContextMenu: Boolean
+    get() = dynamicProps.enableBlockContextMenu
     set(value) {
-      if (field == value) return
-      field = value
-      pushBlockContextMenuToSegments()
+      dynamicProps.enableBlockContextMenu = value
+    }
+  var enableCodeBlockPress: Boolean
+    get() = dynamicProps.enableCodeBlockPress
+    set(value) {
+      dynamicProps.enableCodeBlockPress = value
     }
 
   init {
@@ -256,6 +276,10 @@ class EnrichedMarkdown(
     onLinkLongPressCallback = callback
   }
 
+  fun setOnLatexErrorCallback(callback: LatexErrorReporter) {
+    onLatexErrorCallback = callback
+  }
+
   override var imagePressEnabled: Boolean = false
     private set
 
@@ -275,7 +299,11 @@ class EnrichedMarkdown(
   }
 
   fun setOnCopyPressCallback(callback: ((code: String, language: String) -> Unit)?) {
-    onCopyPressCallback = callback
+    dynamicProps.onCopyPress = callback
+  }
+
+  fun setOnCodeBlockPressCallback(callback: ((code: String, language: String) -> Unit)?) {
+    dynamicProps.onCodeBlockPress = callback
   }
 
   fun setContextMenuItems(items: List<String>) {
@@ -288,69 +316,10 @@ class EnrichedMarkdown(
   fun setSelectionMenuConfig(config: SelectionMenuConfig) {
     if (selectionMenuConfig == config) return
     selectionMenuConfig = config
+    dynamicProps.copyLabel = config.copyLabel
+    dynamicProps.copyAsMarkdownLabel = config.copyAsMarkdownLabel
     segmentViews.filterIsInstance<EnrichedMarkdownInternalText>().forEach {
       it.selectionMenuConfig = config
-    }
-    // Table and math views cache the copy labels, so re-push them on update
-    // (e.g. a language change without a remount) to avoid stale labels.
-    pushCopyLabelsToBlockSegments()
-  }
-
-  private fun pushCopyLabelsToBlockSegments() {
-    val copyLabel = selectionMenuConfig.copyLabel
-    val copyAsMarkdownLabel = selectionMenuConfig.copyAsMarkdownLabel
-    segmentViews.forEach { view ->
-      when {
-        view is TableContainerView -> {
-          view.copyLabel = copyLabel
-          view.copyAsMarkdownLabel = copyAsMarkdownLabel
-        }
-
-        view is CodeBlockContainerView -> {
-          view.copyLabel = copyLabel
-          view.copyAsMarkdownLabel = copyAsMarkdownLabel
-        }
-
-        view is BlockquoteContainerView -> {
-          view.copyLabel = copyLabel
-          view.copyAsMarkdownLabel = copyAsMarkdownLabel
-        }
-
-        isMathContainerView(view) -> {
-          runCatching {
-            view.javaClass.getMethod("setCopyLabel", String::class.java).invoke(view, copyLabel)
-            view.javaClass
-              .getMethod("setCopyAsMarkdownLabel", String::class.java)
-              .invoke(view, copyAsMarkdownLabel)
-          }
-        }
-      }
-    }
-  }
-
-  private fun pushBlockContextMenuToSegments() {
-    segmentViews.forEach { view ->
-      when {
-        view is TableContainerView -> {
-          view.enableBlockContextMenu = enableBlockContextMenu
-        }
-
-        view is CodeBlockContainerView -> {
-          view.enableBlockContextMenu = enableBlockContextMenu
-        }
-
-        view is BlockquoteContainerView -> {
-          view.enableBlockContextMenu = enableBlockContextMenu
-        }
-
-        isMathContainerView(view) -> {
-          runCatching {
-            view.javaClass
-              .getMethod("setEnableBlockContextMenu", Boolean::class.javaPrimitiveType)
-              .invoke(view, enableBlockContextMenu)
-          }
-        }
-      }
     }
   }
 
@@ -435,6 +404,7 @@ class EnrichedMarkdown(
             context,
             onLinkPressCallback,
             onLinkLongPressCallback,
+            onLatexError = latexErrorReporter,
           )
 
         postToMain(renderId) { applyRenderedSegments(renderedSegments, hasPendingCodeBlock) }
@@ -483,6 +453,8 @@ class EnrichedMarkdown(
 
   private fun isMathContainerView(view: View): Boolean = mathContainerClass?.isInstance(view) == true
 
+  private fun isVideoContainerView(view: View): Boolean = videoContainerClass?.isInstance(view) == true
+
   private fun segmentViewConfig(): SegmentViewConfig =
     SegmentViewConfig(
       context = context,
@@ -496,12 +468,12 @@ class EnrichedMarkdown(
       selectionColor = selectionColor,
       selectionHandleColor = selectionHandleColor,
       contextMenuItemTexts = contextMenuItemTexts,
-      enableBlockContextMenu = enableBlockContextMenu,
+      dynamicProps = dynamicProps,
       onLinkPress = onLinkPressCallback,
       onLinkLongPress = onLinkLongPressCallback,
-      onCopyPress = onCopyPressCallback,
       onTaskListItemPress = onTaskListItemPressCallback,
       onContextMenuItemPress = ::forwardContextMenuItemPress,
+      onLatexError = latexErrorReporter,
     )
 
   /**
@@ -521,6 +493,7 @@ class EnrichedMarkdown(
         is RenderedSegment.Math -> isMathContainerView(view)
         is RenderedSegment.CodeBlock -> view is CodeBlockContainerView
         is RenderedSegment.Blockquote -> view is BlockquoteContainerView
+        is RenderedSegment.Video -> isVideoContainerView(view)
       }
 
     override fun createView(segment: RenderedSegment): View {
@@ -549,6 +522,10 @@ class EnrichedMarkdown(
 
         is RenderedSegment.Blockquote -> {
           SegmentViewCreators.createBlockquoteView(segment, config)
+        }
+
+        is RenderedSegment.Video -> {
+          SegmentViewCreators.createVideoView(segment, config)
         }
       }
     }
@@ -588,6 +565,10 @@ class EnrichedMarkdown(
         is RenderedSegment.Blockquote -> {
           (view as BlockquoteContainerView).applyBlockquoteNode(segment.node)
         }
+
+        is RenderedSegment.Video -> {
+          SegmentViewCreators.updateVideoView(view, segment)
+        }
       }
     }
 
@@ -603,6 +584,7 @@ class EnrichedMarkdown(
         is RenderedSegment.Math,
         is RenderedSegment.CodeBlock,
         is RenderedSegment.Blockquote,
+        is RenderedSegment.Video,
         -> animateBlockViewFadeIn(view)
       }
     }

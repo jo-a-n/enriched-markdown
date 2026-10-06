@@ -6,6 +6,7 @@
 #import "ENRMAtomicSize.h"
 #import "ENRMContextMenuTextView+macOS.h"
 #import "ENRMImageAttachment.h"
+#import "ENRMLatexErrorCoordinator.h"
 #import "ENRMMarkdownParser.h"
 #import "ENRMSpoilerOverlayManager.h"
 #import "ENRMSpoilerTapUtils.h"
@@ -25,6 +26,7 @@
 #import "MarkdownExtractor.h"
 #import "MeasurementCache.h"
 #import "ParagraphStyleUtils.h"
+#import "RenderContext.h"
 #import "RuntimeKeys.h"
 #import "SelectionColorUtils.h"
 #import "StylePropsUtils.h"
@@ -57,6 +59,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
 - (void)emitLinkPress:(NSString *)url;
 - (void)emitLinkLongPress:(NSString *)url;
 - (void)emitImagePress:(NSString *)url altText:(NSString *)altText;
+- (void)emitCodeBlockPress:(NSString *)code language:(NSString *)language;
 - (void)emitTaskListItemPress:(NSInteger)index checked:(BOOL)checked text:(NSString *)text;
 - (void)emitContextMenuItemPress:(NSString *)itemText
                     selectedText:(NSString *)selectedText
@@ -86,6 +89,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   BOOL _enableLinkPreview;
   BOOL _enableTaskListItemToggle;
   BOOL _enableImagePress;
+  BOOL _enableCodeBlockPress;
   BOOL _streamingAnimation;
   BOOL _forceHeightUpdateOnNextRender;
 
@@ -113,12 +117,17 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
 
   NSLineBreakStrategy _lineBreakStrategy;
 
+  NSInteger _numberOfLines;
+  NSLineBreakMode _ellipsizeLineBreakMode;
+
   ENRMWritingDirectionMode _writingDirectionMode;
   NSWritingDirection _resolvedLayoutDirection;
 
   ENRMDirtyFlags _dirtyFlags;
 
   ENRMAtomicSize _lastCommittedSize;
+
+  ENRMLatexErrorCoordinator *_latexErrorCoordinator;
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider
@@ -141,6 +150,34 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
 }
 
 #pragma mark - Measuring and State
+
+/// The box the text actually lives in: `self.bounds` inset by the
+/// `containerStyle` border and padding.
+///
+/// Yoga hands `measureContent` an available size that already excludes those
+/// insets, and `RCTViewComponentView` sizes `contentView` (our text view) to
+/// `layoutMetrics.getContentFrame()`, so the shadow node's height and the text
+/// view's frame are both content-box quantities. Measuring at `self.bounds`
+/// instead overshoots by the horizontal insets, and because
+/// `ENRMMeasureTextLayout` measures by resizing the live display container and
+/// leaves it there (UIKit never re-syncs it - `widthTracksTextView` does not
+/// apply with `scrollEnabled = NO`), the overshoot becomes the layout the user
+/// sees: glyphs spill past the text view and get clipped, while the taller
+/// content-width height Yoga committed shows up as blank space at the bottom.
+///
+/// The text view's frame is authoritative, so this is zero-sized both before the
+/// first layout metrics arrive and when the insets consume the whole component
+/// width. Neither may fall back to `self.bounds`: that is the padded border box,
+/// and in the second case it is a real layout the text would then be drawn
+/// across. Callers skip measuring and laying out at a zero width instead.
+///
+/// The frame, not the bounds: a `UITextView` is a scroll view, so its
+/// `bounds.origin` is the content offset rather than the inset the segments of
+/// `EnrichedMarkdown` get from the matching method.
+- (CGRect)contentBounds
+{
+  return _textView.frame;
+}
 
 - (CGSize)measureSize:(CGFloat)maxWidth
 {
@@ -177,15 +214,21 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   }
 }
 
-/// Yoga-resolved direction inherited from any ancestor `direction` style.
-/// In FirstStrong mode this feeds the neutral-paragraph fallback, so a change
-/// requires a re-render of the cached markdown.
+/// Publishes the committed size to the streaming fast path's mailbox, and picks
+/// up the Yoga-resolved direction inherited from any ancestor `direction` style.
+/// In FirstStrong mode the direction feeds the neutral-paragraph fallback, so a
+/// change requires a re-render of the cached markdown.
+///
+/// The mailbox holds a content size, not the border box: `measureContent`
+/// returns it straight to Yoga, which adds the `containerStyle` insets back on
+/// top of whatever it gets, so storing `frame.size` would double-count them.
 - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
            oldLayoutMetrics:(const LayoutMetrics &)oldLayoutMetrics
 {
   [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
 
-  _lastCommittedSize.store(CGSizeMake(layoutMetrics.frame.size.width, layoutMetrics.frame.size.height));
+  const auto contentSize = layoutMetrics.getContentFrame().size;
+  _lastCommittedSize.store(CGSizeMake(contentSize.width, contentSize.height));
 
   NSWritingDirection resolved = _resolvedLayoutDirection;
   if (layoutMetrics.layoutDirection == LayoutDirection::RightToLeft) {
@@ -216,9 +259,10 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
     facebook::react::MeasurementCache::shared().removeMatchingMarkdown(std::string(_renderedMarkdown.UTF8String));
   }
 
-  if (self.bounds.size.width > 0) {
-    CGSize measured = [self measureSize:self.bounds.size.width];
-    if (needsHeightUpdate(measured, self.bounds)) {
+  CGRect contentBounds = [self contentBounds];
+  if (contentBounds.size.width > 0) {
+    CGSize measured = [self measureSize:contentBounds.size.width];
+    if (needsHeightUpdate(measured, contentBounds)) {
       [self requestHeightUpdate];
     }
   }
@@ -238,14 +282,33 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
     _renderCoordinator =
         [[ENRMAsyncRenderCoordinator alloc] initWithQueueLabel:"com.swmansion.enriched.markdown.render"];
 
+    __weak __typeof(self) weakLatexSelf = self;
+    _latexErrorCoordinator =
+        [[ENRMLatexErrorCoordinator alloc] initWithEmit:^BOOL(NSString *source, NSString *message, BOOL displayMode) {
+          __typeof(self) strongSelf = weakLatexSelf;
+          if (!strongSelf)
+            return NO;
+          auto emitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(strongSelf->_eventEmitter);
+          if (!emitter)
+            return NO;
+          emitter->onLatexError({
+              .source = std::string(source.UTF8String ?: ""),
+              .message = std::string(message.UTF8String ?: ""),
+              .displayMode = displayMode ? true : false,
+          });
+          return YES;
+        }];
     _maxFontSizeMultiplier = 0;
     _allowTrailingMargin = NO;
     _enableLinkPreview = YES;
     _enableTaskListItemToggle = YES;
     _enableImagePress = NO;
+    _enableCodeBlockPress = NO;
     _forceHeightUpdateOnNextRender = NO;
     _selectionMenuConfig = (ENRMSelectionMenuConfig){.copyAsMarkdown = YES, .copyImageURL = YES};
     _lineBreakStrategy = NSLineBreakStrategyNone;
+    _numberOfLines = 0;
+    _ellipsizeLineBreakMode = NSLineBreakByTruncatingTail;
     _writingDirectionMode = ENRMWritingDirectionModeFirstStrong;
     _resolvedLayoutDirection =
         [[RCTI18nUtil sharedInstance] isRTL] ? NSWritingDirectionRightToLeft : NSWritingDirectionLeftToRight;
@@ -303,7 +366,8 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
                                   selectionEnd:selectionEnd];
         });
     return buildEditMenuForSelection(textView.textStorage, textView.selectedRange, strongSelf->_cachedMarkdown,
-                                     strongSelf->_config, @[ baseMenu ], customItems, strongSelf->_selectionMenuConfig);
+                                     strongSelf->_config, @[ baseMenu ], customItems,
+                                     strongSelf -> _selectionMenuConfig);
   };
 #endif
 
@@ -371,6 +435,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
         self->_lastElementMarginBottom = result.lastElementMarginBottom;
         self->_accessibilityInfo = result.accessibilityInfo;
         self->_renderedStyleFingerprint = self->_pendingStyleFingerprint;
+        [self->_latexErrorCoordinator wireReporters:result.context.mathReporters];
         [self applyRenderedText:result.attributedText];
       }];
 }
@@ -413,6 +478,21 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   _renderedStyleFingerprint = _pendingStyleFingerprint;
 }
 
+// Kept in sync with the view-free measurement so the rendered line count matches
+// the measured height: both clamp a layout performed at the content width (see
+// contentBounds), so the truncation falls on the same word.
+// numberOfLines == 0 restores the unlimited default.
+- (void)applyLineClampToTextContainer
+{
+  if (_numberOfLines > 0) {
+    _textView.textContainer.maximumNumberOfLines = _numberOfLines;
+    _textView.textContainer.lineBreakMode = _ellipsizeLineBreakMode;
+  } else {
+    _textView.textContainer.maximumNumberOfLines = 0;
+    _textView.textContainer.lineBreakMode = NSLineBreakByWordWrapping;
+  }
+}
+
 - (void)applyRenderedText:(NSMutableAttributedString *)attributedText
 {
   NSUInteger tailStart = _previousTextLength;
@@ -427,11 +507,13 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   // Ensure the text container has unlimited height before setting content.
   // updateLayoutMetrics may have shrunk the frame (and thus the text container)
   // from a previous layout pass, which would clip the new attributed text.
-  CGFloat containerWidth = _textView.textContainer.size.width;
+  CGRect contentBounds = [self contentBounds];
+  CGFloat containerWidth = contentBounds.size.width;
   if (containerWidth <= 0) {
-    containerWidth = self.bounds.size.width;
+    containerWidth = _textView.textContainer.size.width;
   }
   _textView.textContainer.size = CGSizeMake(containerWidth, CGFLOAT_MAX);
+  [self applyLineClampToTextContainer];
 
   _accessibilityElements = nil;
   _accessibilityNeedsRebuild = YES;
@@ -448,7 +530,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   // that corrupts the height sent to Yoga.
   [_spoilerManager setNeedsUpdate];
 
-  if (self.bounds.size.width > 0) {
+  if (contentBounds.size.width > 0) {
     // Font/style changes can produce the same measured size before UIKit has
     // fully refreshed layout, so force one Yoga update after those renders.
     BOOL forceHeightUpdate = _forceHeightUpdateOnNextRender;
@@ -462,8 +544,8 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
 
     [_spoilerManager updateIfNeeded];
 
-    CGSize measured = [self measureSize:self.bounds.size.width];
-    if (forceHeightUpdate || needsHeightUpdate(measured, self.bounds)) {
+    CGSize measured = [self measureSize:contentBounds.size.width];
+    if (forceHeightUpdate || needsHeightUpdate(measured, contentBounds)) {
       [self requestHeightUpdate];
     }
   }
@@ -505,7 +587,6 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   }
 
   if (applyMarkdownStyleToConfig(_config, newViewProps.markdownStyle, oldViewProps.markdownStyle)) {
-    [ENRMImageAttachment clearAttachmentRegistry];
     _forceHeightUpdateOnNextRender = YES;
     _dirtyFlags |= ENRMDirtyRender;
   }
@@ -581,6 +662,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
   _enableLinkPreview = newViewProps.enableLinkPreview;
   _enableTaskListItemToggle = newViewProps.enableTaskListItemToggle;
   _enableImagePress = newViewProps.enableImagePress;
+  _enableCodeBlockPress = newViewProps.enableCodeBlockPress;
 
   if (ENRMContextMenuItemsChanged(oldViewProps.contextMenuItems, newViewProps.contextMenuItems)) {
     _contextMenuItemTexts = ENRMContextMenuTextsFromItems(newViewProps.contextMenuItems);
@@ -649,6 +731,21 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
     _dirtyFlags |= ENRMDirtyRender;
   }
 
+  if (newViewProps.numberOfLines != oldViewProps.numberOfLines) {
+    _numberOfLines = (NSInteger)newViewProps.numberOfLines;
+    [self applyLineClampToTextContainer];
+    _forceHeightUpdateOnNextRender = YES;
+    _dirtyFlags |= ENRMDirtyRender;
+  }
+
+  if (newViewProps.ellipsizeMode != oldViewProps.ellipsizeMode) {
+    _ellipsizeLineBreakMode =
+        ENRMResolveEllipsizeLineBreakMode([[NSString alloc] initWithUTF8String:newViewProps.ellipsizeMode.c_str()]);
+    [self applyLineClampToTextContainer];
+    _forceHeightUpdateOnNextRender = YES;
+    _dirtyFlags |= ENRMDirtyRender;
+  }
+
   if (_dirtyFlags & ENRMDirtyRender) {
     _pendingStyleFingerprint =
         computeStyleFingerprint(newViewProps.markdownStyle) ^ std::hash<bool>{}(newViewProps.allowTrailingMargin);
@@ -666,14 +763,20 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
 
   if (self.window && _renderedMarkdown != nil) {
     _textView.hidden = NO;
-    ENRMRefreshTextViewAfterWindowAttach(_textView, self.bounds);
+    // Refresh in place: RCTViewComponentView owns the text view's frame and has
+    // already set it to the content frame, so re-assigning self.bounds here would
+    // drop the containerStyle insets (see contentBounds).
+    ENRMRefreshTextViewLayout(_textView);
 
     [_spoilerManager setNeedsUpdate];
     [_spoilerManager updateIfNeeded];
 
-    CGSize measured = [self measureSize:self.bounds.size.width];
-    if (needsHeightUpdate(measured, self.bounds)) {
-      [self requestHeightUpdate];
+    CGRect contentBounds = [self contentBounds];
+    if (contentBounds.size.width > 0) {
+      CGSize measured = [self measureSize:contentBounds.size.width];
+      if (needsHeightUpdate(measured, contentBounds)) {
+        [self requestHeightUpdate];
+      }
     }
   }
 }
@@ -727,7 +830,7 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
 {
   if (_textView) {
     CGPoint textViewPoint = [self convertPoint:point toView:_textView];
-    if (isPointOnInteractiveElement(_textView, textViewPoint, _enableImagePress)) {
+    if (isPointOnInteractiveElement(_textView, textViewPoint, _enableImagePress, _enableCodeBlockPress)) {
       return nil;
     }
   }
@@ -756,6 +859,14 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
     emitter->onImagePress({.url = std::string(url.UTF8String ?: ""), .altText = std::string(altText.UTF8String ?: "")});
 }
 
+- (void)emitCodeBlockPress:(NSString *)code language:(NSString *)language
+{
+  auto emitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
+  if (emitter)
+    emitter->onCodeBlockPress(
+        {.code = std::string(code.UTF8String ?: ""), .language = std::string(language.UTF8String ?: "")});
+}
+
 - (void)emitTaskListItemPress:(NSInteger)index checked:(BOOL)checked text:(NSString *)text
 {
   auto emitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
@@ -776,6 +887,12 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
         .selectionStart = (int)selectionStart,
         .selectionEnd = (int)selectionEnd,
     });
+}
+
+- (void)updateEventEmitter:(const facebook::react::EventEmitter::Shared &)eventEmitter
+{
+  [super updateEventEmitter:eventEmitter];
+  [_latexErrorCoordinator flushPending];
 }
 
 - (void)textTapped:(ENRMTapRecognizer *)recognizer
@@ -804,6 +921,17 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
     NSDictionary<NSString *, NSString *> *image = imageAtTapLocation(textView, recognizer);
     if (image) {
       [self emitImagePress:image[@"url"] altText:image[@"altText"]];
+      return;
+    }
+  }
+
+  // Skip while text is selected so the tap clears the selection instead of
+  // firing the press (matches the web guard).
+  if (_enableCodeBlockPress && textView.selectedRange.length == 0) {
+    NSDictionary<NSString *, NSString *> *codeBlock = codeBlockAtTapLocation(textView, recognizer);
+    if (codeBlock) {
+      [self emitCodeBlockPress:codeBlock[@"code"] language:codeBlock[@"language"]];
+      return;
     }
   }
 }

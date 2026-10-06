@@ -6,6 +6,7 @@ import type {
   LinkLongPressEvent,
   ImagePressEvent,
   TaskListItemPressEvent,
+  CodeBlockPressEvent,
 } from '../types/events';
 import type { KaTeXInstance } from './katex';
 
@@ -41,7 +42,8 @@ export type NodeType =
   | 'LatexMathInline'
   | 'LatexMathDisplay'
   | 'BlankLine'
-  | 'Admonition';
+  | 'Admonition'
+  | 'Video';
 
 export interface NodeAttributes {
   level?: string;
@@ -80,6 +82,7 @@ export interface RendererCallbacks {
   onLinkLongPress?: (event: LinkLongPressEvent) => void;
   onImagePress?: (event: ImagePressEvent) => void;
   onTaskListItemPress?: (event: TaskListItemPressEvent) => void;
+  onCodeBlockPress?: (event: CodeBlockPressEvent) => void;
 }
 
 export interface RenderCapabilities {

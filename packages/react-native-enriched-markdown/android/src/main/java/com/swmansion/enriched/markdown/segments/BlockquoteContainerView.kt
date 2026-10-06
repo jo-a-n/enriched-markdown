@@ -65,10 +65,6 @@ class BlockquoteContainerView(
   // Cached plain text for the "Copy" action.
   private var cachedPlainText: String = ""
 
-  var copyLabel: String = ""
-  var copyAsMarkdownLabel: String = ""
-  var enableBlockContextMenu: Boolean = true
-
   private val iconSizePx: Int = ceil(blockquoteStyle.fontSize).toInt()
 
   private val titlePaint =
@@ -141,21 +137,22 @@ class BlockquoteContainerView(
         parentConfig.onLinkPress,
         parentConfig.onLinkLongPress,
         blockquoteStyle,
+        onLatexError = parentConfig.onLatexError,
       )
     applySegments(rendered, reset = false)
     requestLayout()
   }
 
   private fun showContextMenu(anchor: View): Boolean {
-    if (!enableBlockContextMenu) return false
+    if (!parentConfig.dynamicProps.enableBlockContextMenu) return false
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     ContextMenuPopup.show(anchor, this) {
-      item(ContextMenuPopup.Icon.COPY, copyLabel) {
+      item(ContextMenuPopup.Icon.COPY, parentConfig.dynamicProps.copyLabel) {
         if (cachedPlainText.isNotEmpty()) {
           clipboard.setPrimaryClip(ClipData.newPlainText("Blockquote", cachedPlainText))
         }
       }
-      item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) {
+      item(ContextMenuPopup.Icon.DOCUMENT, parentConfig.dynamicProps.copyAsMarkdownLabel) {
         if (cachedMarkdown.isNotEmpty()) {
           clipboard.setPrimaryClip(ClipData.newPlainText("Blockquote", cachedMarkdown))
         }
@@ -284,6 +281,7 @@ class BlockquoteContainerView(
         is RenderedSegment.Math -> SegmentViewCreators.isMathContainerView(view)
         is RenderedSegment.CodeBlock -> view is CodeBlockContainerView
         is RenderedSegment.Blockquote -> view is BlockquoteContainerView
+        is RenderedSegment.Video -> SegmentViewCreators.isVideoContainerView(view)
       }
 
     override fun createView(segment: RenderedSegment): View =
@@ -307,6 +305,10 @@ class BlockquoteContainerView(
         is RenderedSegment.Blockquote -> {
           SegmentViewCreators.createBlockquoteView(segment, parentConfig).apply { nested = true }
         }
+
+        is RenderedSegment.Video -> {
+          SegmentViewCreators.createVideoView(segment, parentConfig)
+        }
       }
 
     override fun updateView(
@@ -319,6 +321,7 @@ class BlockquoteContainerView(
         is RenderedSegment.Math -> SegmentViewCreators.updateMathView(view, segment)
         is RenderedSegment.CodeBlock -> (view as CodeBlockContainerView).applyCodeBlockNode(segment.node)
         is RenderedSegment.Blockquote -> (view as BlockquoteContainerView).applyBlockquoteNode(segment.node)
+        is RenderedSegment.Video -> SegmentViewCreators.updateVideoView(view, segment)
       }
     }
 

@@ -1,3 +1,4 @@
+export type { LinkVariantStyle } from './types/MarkdownStyle';
 export { default as EnrichedMarkdownText } from './native/EnrichedMarkdownText';
 export type {
   EnrichedMarkdownTextProps,
@@ -14,6 +15,8 @@ export type {
   ImagePressEvent,
   TaskListItemPressEvent,
   CopyPressEvent,
+  LatexErrorEvent,
+  CodeBlockPressEvent,
 } from './types/events';
 export type {
   AccessibilityLabels,
@@ -33,6 +36,7 @@ export type {
   ContextMenuItem,
   InputSelectionMenuConfig,
   FormatMenuConfig,
+  MarkdownShortcutsConfig,
   OnKeyPressEvent,
   OnLinkDetected,
   OnLinkPressEvent,

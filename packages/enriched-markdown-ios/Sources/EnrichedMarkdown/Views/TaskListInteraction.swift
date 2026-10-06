@@ -76,7 +76,7 @@ enum TaskListInteraction {
         in attributedText: NSAttributedString,
         index: Int,
         checked: Bool,
-        config: MarkdownStyleConfig
+        config: MarkdownStyleConfiguration
     ) -> NSAttributedString? {
         var itemRanges: [NSRange] = []
         attributedText.enumerateAttribute(
@@ -114,6 +114,7 @@ enum TaskListInteraction {
             } else {
                 TaskListDecoration.remove(from: result, range: range, baseColor: baseColor)
             }
+            SpoilerConcealment.conceal(result, in: range)
         }
         return result
     }

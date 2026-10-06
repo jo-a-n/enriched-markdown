@@ -57,6 +57,8 @@ enum ParagraphStyleHelpers {
         output.addAttribute(.paragraphStyle, value: style, range: range)
     }
 
+    /// A range holding a plugin attachment (typeset math) keeps only the
+    /// minimum line height, so taller-than-text content is not clipped.
     static func applyLineHeight(
         to output: NSMutableAttributedString,
         range: NSRange,
@@ -68,8 +70,19 @@ enum ParagraphStyleHelpers {
         let style = getOrCreateParagraphStyle(in: output, at: range.location)
         style.lineSpacing = 0
         style.minimumLineHeight = roundedLineHeight
-        style.maximumLineHeight = roundedLineHeight
+        style.maximumLineHeight = containsPluginAttachment(output, in: range) ? 0 : roundedLineHeight
         output.addAttribute(.paragraphStyle, value: style, range: range)
+    }
+
+    private static func containsPluginAttachment(_ output: NSAttributedString, in range: NSRange) -> Bool {
+        var found = false
+        output.enumerateAttribute(.attachment, in: range, options: []) { value, _, stop in
+            if value is any MarkdownPluginAttachment {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
     }
 
     static func applyBaselineOffset(
@@ -144,55 +157,6 @@ enum ParagraphStyleHelpers {
         return NSMutableParagraphStyle()
     }
 
-    static func applyHeadIndent(
-        to output: NSMutableAttributedString,
-        range: NSRange,
-        indent: CGFloat
-    ) {
-        guard range.length > 0 else { return }
-
-        output.enumerateAttribute(
-            .paragraphStyle,
-            in: range,
-            options: []
-        ) { value, subrange, _ in
-            let paragraphStyle: NSMutableParagraphStyle
-            if let existing = value as? NSParagraphStyle,
-               let mutable = existing.mutableCopy() as? NSMutableParagraphStyle {
-                paragraphStyle = mutable
-            } else {
-                paragraphStyle = NSMutableParagraphStyle()
-            }
-            paragraphStyle.firstLineHeadIndent = indent
-            paragraphStyle.headIndent = indent
-            output.addAttribute(.paragraphStyle, value: paragraphStyle, range: subrange)
-        }
-    }
-
-    static func applyTextLists(
-        to output: NSMutableAttributedString,
-        range: NSRange,
-        lists: [NSTextList]
-    ) {
-        guard range.length > 0 else { return }
-
-        output.enumerateAttribute(
-            .paragraphStyle,
-            in: range,
-            options: []
-        ) { value, subrange, _ in
-            let paragraphStyle: NSMutableParagraphStyle
-            if let existing = value as? NSParagraphStyle,
-               let mutable = existing.mutableCopy() as? NSMutableParagraphStyle {
-                paragraphStyle = mutable
-            } else {
-                paragraphStyle = NSMutableParagraphStyle()
-            }
-            paragraphStyle.textLists = lists
-            output.addAttribute(.paragraphStyle, value: paragraphStyle, range: subrange)
-        }
-    }
-
     static func spacerParagraphStyle(height: CGFloat, spacing: CGFloat = 0) -> NSMutableParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.minimumLineHeight = height
@@ -201,14 +165,17 @@ enum ParagraphStyleHelpers {
         return style
     }
 
+    /// `mutableString` reads the last character in place; bridging
+    /// `output.string` to a Swift `String` copies the whole document, and
+    /// this is asked once per block.
     static func ensureTrailingNewline(in output: NSMutableAttributedString) {
-        guard output.length > 0, !output.string.hasSuffix("\n") else { return }
+        let length = output.length
+        guard length > 0, output.mutableString.character(at: length - 1) != 0x0A else { return }
         output.append(newline)
     }
 
     static func ensureStartingOnNewLine(in output: NSMutableAttributedString) {
-        guard output.length > 0, !output.string.hasSuffix("\n") else { return }
-        output.append(newline)
+        ensureTrailingNewline(in: output)
     }
 
     static func applyBlockSpacingAfter(

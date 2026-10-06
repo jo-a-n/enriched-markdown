@@ -60,7 +60,17 @@
 @property (nonatomic, copy, readwrite) NSString *cachedLatex;
 @end
 
-@implementation ENRMMathContainerView
+@implementation ENRMMathContainerView {
+  BOOL _parseFailed;
+  NSString *_parseMessage;
+}
+
+- (void)reportLatexErrorIfNeeded
+{
+  if (_parseFailed && self.onLatexError) {
+    self.onLatexError(_cachedLatex, _parseMessage ?: @"", YES);
+  }
+}
 
 - (instancetype)initWithConfig:(StyleConfig *)config
 {
@@ -68,7 +78,7 @@
   if (self) {
     _config = config;
     _cachedLatex = @"";
-    _enableBlockContextMenu = YES;
+    _dynamicProps = [[ENRMDynamicBlockProps alloc] init];
 
     _mathView = [[ENRMRaTeXCanvasView alloc] initWithFrame:CGRectZero];
     _mathView.backgroundColor = [RCTUIColor clearColor];
@@ -97,13 +107,22 @@
 - (void)applyLatex:(NSString *)latex
 {
   _cachedLatex = [latex copy];
+  _parseFailed = NO;
+  _parseMessage = nil;
 
   StyleConfig *config = self.config;
 
+  NSError *error = nil;
   ENRMRaTeXRenderResult *result = [ENRMRaTeXBridge parse:latex
                                              displayMode:YES
                                                 fontSize:config.mathFontSize
-                                                   color:config.mathColor];
+                                                   color:config.mathColor
+                                                   error:&error];
+  if (!result) {
+    _parseFailed = YES;
+    _parseMessage = error.localizedDescription ?: @"";
+    [self reportLatexErrorIfNeeded];
+  }
   _mathView.renderResult = result;
   _mathView.fallbackSource = result ? nil : ENRMMathFallbackString(latex, @"$$", config.mathFontSize, config.mathColor);
 
@@ -125,7 +144,7 @@
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                         configurationForMenuAtLocation:(CGPoint)location
 {
-  if (!self.enableBlockContextMenu) {
+  if (!self.dynamicProps.enableBlockContextMenu) {
     return nil;
   }
   return [UIContextMenuConfiguration
@@ -133,13 +152,13 @@
                   previewProvider:nil
                    actionProvider:^UIMenu *(NSArray<UIMenuElement *> *suggestedActions) {
                      UIAction *copyPlainText =
-                         [UIAction actionWithTitle:self.copyLabel
+                         [UIAction actionWithTitle:self.dynamicProps.menuCopyLabel
                                              image:[RCTUIImage systemImageNamed:@"doc.on.doc"]
                                         identifier:nil
                                            handler:^(__kindof UIAction *action) { [self copyLatexToPasteboard]; }];
 
                      UIAction *copyMarkdown =
-                         [UIAction actionWithTitle:self.copyAsMarkdownLabel
+                         [UIAction actionWithTitle:self.dynamicProps.menuCopyAsMarkdownLabel
                                              image:[RCTUIImage systemImageNamed:@"doc.text"]
                                         identifier:nil
                                            handler:^(__kindof UIAction *action) { [self copyMarkdownToPasteboard]; }];
@@ -152,12 +171,12 @@
 #if TARGET_OS_OSX
 - (NSMenu *)menuForEvent:(NSEvent *)event
 {
-  if (!self.enableBlockContextMenu) {
+  if (!self.dynamicProps.enableBlockContextMenu) {
     return nil;
   }
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
-  [menu addItem:ENRMCreateMenuItem(self.copyLabel, ^{ [self copyLatexToPasteboard]; })];
-  [menu addItem:ENRMCreateMenuItem(self.copyAsMarkdownLabel, ^{ [self copyMarkdownToPasteboard]; })];
+  [menu addItem:ENRMCreateMenuItem(self.dynamicProps.menuCopyLabel, ^{ [self copyLatexToPasteboard]; })];
+  [menu addItem:ENRMCreateMenuItem(self.dynamicProps.menuCopyAsMarkdownLabel, ^{ [self copyMarkdownToPasteboard]; })];
   return menu;
 }
 #endif

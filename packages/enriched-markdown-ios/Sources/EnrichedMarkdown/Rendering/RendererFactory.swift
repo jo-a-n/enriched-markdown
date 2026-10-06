@@ -1,14 +1,26 @@
 import UIKit
 
 final class RendererFactory {
-    private let config: MarkdownStyleConfig
+    private let config: MarkdownStyleConfiguration
     private let imageRequestHeaders: [String: String]
+    private let plugins: [any MarkdownRenderPlugin]
+    private let writingDirection: MarkdownWritingDirection
+    private let layoutDirection: UIUserInterfaceLayoutDirection
     private var cache: [NodeType: NodeRenderer] = [:]
     private lazy var childrenOnlyRenderer = ChildrenOnlyRenderer(factory: self)
 
-    init(config: MarkdownStyleConfig, imageRequestHeaders: [String: String] = [:]) {
+    init(
+        config: MarkdownStyleConfiguration,
+        imageRequestHeaders: [String: String] = [:],
+        plugins: [any MarkdownRenderPlugin] = [],
+        writingDirection: MarkdownWritingDirection = .firstStrong,
+        layoutDirection: UIUserInterfaceLayoutDirection = .leftToRight
+    ) {
         self.config = config
         self.imageRequestHeaders = imageRequestHeaders
+        self.plugins = plugins
+        self.writingDirection = writingDirection
+        self.layoutDirection = layoutDirection
     }
 
     func renderer(for type: NodeType) -> NodeRenderer {
@@ -19,6 +31,12 @@ final class RendererFactory {
         let renderer = createRenderer(for: type)
         cache[type] = renderer
         return renderer
+    }
+
+    /// Resolves paragraph directions; run on the document and on every
+    /// table cell, which is drawn from its own string.
+    func applyWritingDirection(to output: NSMutableAttributedString) {
+        WritingDirectionResolver.apply(writingDirection, layoutDirection: layoutDirection, to: output)
     }
 
     func renderChildren(
@@ -32,6 +50,11 @@ final class RendererFactory {
     }
 
     private func createRenderer(for type: NodeType) -> NodeRenderer {
+        for plugin in plugins {
+            if let renderer = plugin.renderer(for: type, config: config) {
+                return renderer
+            }
+        }
         if let renderer = createInlineRenderer(for: type) {
             return renderer
         }
@@ -60,6 +83,10 @@ final class RendererFactory {
             return BaselineShiftRenderer(factory: self, attributeKey: MarkdownAttribute.superscript)
         case .subscript:
             return BaselineShiftRenderer(factory: self, attributeKey: MarkdownAttribute.subscript)
+        case .highlight:
+            return HighlightRenderer(factory: self, config: config)
+        case .spoiler:
+            return SpoilerRenderer(factory: self)
         case .link:
             return LinkRenderer(factory: self, config: config)
         case .lineBreak:
@@ -87,7 +114,7 @@ final class RendererFactory {
             return BlankLineRenderer(config: config)
         case .codeBlock:
             return CodeBlockRenderer(factory: self, config: config)
-        case .blockquote:
+        case .blockquote, .admonition:
             return BlockquoteRenderer(factory: self, config: config)
         case .unorderedList:
             return ListRenderer(factory: self, config: config, isOrdered: false)

@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -12,6 +13,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import com.swmansion.enriched.markdown.accessibility.AccessibilityLabels
+import com.swmansion.enriched.markdown.math.LatexErrorReporter
 import com.swmansion.enriched.markdown.spans.MathMeasureHelper
 import com.swmansion.enriched.markdown.spans.MathMeasureRequest
 import com.swmansion.enriched.markdown.spans.MathRenderMode
@@ -37,11 +39,8 @@ class MathContainerView(
       field = value
       updateAccessibilityLabel()
     }
-
-  // Set reflectively by EnrichedMarkdown (math is an optional module).
-  var copyLabel: String = ""
-  var copyAsMarkdownLabel: String = ""
-  var enableBlockContextMenu: Boolean = true
+  var dynamicProps: DynamicBlockProps = DynamicBlockProps()
+  var onLatexError: LatexErrorReporter? = null
 
   override val segmentMarginTop: Int get() = mathStyle.marginTop.toInt()
   override val segmentMarginBottom: Int get() = mathStyle.marginBottom.toInt()
@@ -97,9 +96,14 @@ class MathContainerView(
     try {
       val displayList = RaTeXEngine.parseBlocking(latex, displayMode = true, color = mathStyle.color)
       mathView.renderer = RaTeXRenderer(displayList, mathStyle.fontSize) { RaTeXFontLoader.getTypeface(it) }
+      mathView.fallbackText = null
     } catch (e: Exception) {
       Log.e(TAG, "Failed to render LaTeX", e)
       mathView.renderer = null
+      mathView.fallbackText = "\$\$" + latex + "\$\$"
+      mathView.fallbackColor = mathStyle.color
+      mathView.fallbackFontSize = mathStyle.fontSize
+      onLatexError?.report(latex, e.message, true)
     }
     mathView.requestLayout()
     mathView.invalidate()
@@ -111,13 +115,13 @@ class MathContainerView(
   }
 
   private fun showContextMenu(anchor: View): Boolean {
-    if (!enableBlockContextMenu) return false
+    if (!dynamicProps.enableBlockContextMenu) return false
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     ContextMenuPopup.show(anchor, this) {
-      item(ContextMenuPopup.Icon.COPY, copyLabel) {
+      item(ContextMenuPopup.Icon.COPY, dynamicProps.copyLabel) {
         clipboard.setPrimaryClip(ClipData.newPlainText("Math", cachedLatex))
       }
-      item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) {
+      item(ContextMenuPopup.Icon.DOCUMENT, dynamicProps.copyAsMarkdownLabel) {
         clipboard.setPrimaryClip(ClipData.newPlainText("Math", "$$\n$cachedLatex\n$$"))
       }
     }
@@ -129,21 +133,49 @@ class MathContainerView(
   ) : View(context) {
     var renderer: RaTeXRenderer? = null
 
+    var fallbackText: String? = null
+    var fallbackColor: Int = 0
+    var fallbackFontSize: Float = 0f
+    private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
     override fun onMeasure(
       widthMeasureSpec: Int,
       heightMeasureSpec: Int,
     ) {
-      val currentRenderer =
-        renderer
-          ?: return setMeasuredDimension(0, 0)
-      setMeasuredDimension(
-        ceil(currentRenderer.widthPx).toInt().coerceAtLeast(1),
-        ceil(currentRenderer.totalHeightPx).toInt().coerceAtLeast(1),
-      )
+      val currentRenderer = renderer
+      if (currentRenderer != null) {
+        setMeasuredDimension(
+          ceil(currentRenderer.widthPx).toInt().coerceAtLeast(1),
+          ceil(currentRenderer.totalHeightPx).toInt().coerceAtLeast(1),
+        )
+        return
+      }
+
+      val fallback = fallbackText
+      if (fallback != null) {
+        fallbackPaint.textSize = fallbackFontSize
+        val metrics = fallbackPaint.fontMetrics
+        setMeasuredDimension(
+          ceil(fallbackPaint.measureText(fallback)).toInt().coerceAtLeast(1),
+          ceil(metrics.descent - metrics.ascent).toInt().coerceAtLeast(1),
+        )
+        return
+      }
+
+      setMeasuredDimension(0, 0)
     }
 
     override fun onDraw(canvas: Canvas) {
-      renderer?.draw(canvas)
+      val currentRenderer = renderer
+      if (currentRenderer != null) {
+        currentRenderer.draw(canvas)
+        return
+      }
+
+      val fallback = fallbackText ?: return
+      fallbackPaint.textSize = fallbackFontSize
+      fallbackPaint.color = fallbackColor
+      canvas.drawText(fallback, 0f, -fallbackPaint.fontMetrics.ascent, fallbackPaint)
     }
   }
 

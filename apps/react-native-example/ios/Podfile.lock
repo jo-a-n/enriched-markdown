@@ -1938,7 +1938,7 @@ PODS:
     - React-utils (= 0.86.0)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.86.0)
-  - ReactNativeEnrichedMarkdown (1.0.2):
+  - ReactNativeEnrichedMarkdown (1.1.1):
     - EnrichedMarkdownCore
     - hermes-engine
     - RCTRequired
@@ -2633,7 +2633,7 @@ SPEC CHECKSUMS:
   ReactCodegen: afe0d436ee089d7bea6418429d8312b1d23a6801
   ReactCommon: d5c1bb4427bf51c443de5926aac332c89ddd9363
   ReactNativeDependencies: fa0a54b3f5319ae0e3b9aff32bfee7a424b88e66
-  ReactNativeEnrichedMarkdown: 5637dcfc8c8aa62fd866d418221fd31465dbdb15
+  ReactNativeEnrichedMarkdown: f051551bc5671f514c363fb771a0f149922e88dd
   RNCAsyncStorage: d0aafe51ea74a65afce26acb739a4ea975a7a884
   RNDateTimePicker: 7b2738f1e595f83c14580a11c476872755c5befc
   RNGestureHandler: 92172e79df6e88e0e93b6341f9dcd8b5a02746ba
@@ -2643,6 +2643,6 @@ SPEC CHECKSUMS:
   RNWorklets: ae7f2b95d75b903387e6359583f2fd67bc9a93ff
   Yoga: fe50ab299e578f397fef753cf309c6703a4db29b
 
-PODFILE CHECKSUM: c50941eff996f01b8b4099a0640ffde77228a027
+PODFILE CHECKSUM: fb41a03a6aaff1d1c19af83951ec8d5cdebbbedc
 
 COCOAPODS: 1.15.2

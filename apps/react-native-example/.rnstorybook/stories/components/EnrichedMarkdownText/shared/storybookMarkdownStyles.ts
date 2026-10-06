@@ -193,6 +193,22 @@ export const imageStyledDefaults: ImageStyleControls = {
   marginBottom: 16,
 };
 
+export type VideoStyleControls = {
+  marginTop: number;
+  marginBottom: number;
+  borderRadius: number;
+  aspectRatio: number;
+  backgroundColor: string;
+};
+
+export const videoStyledDefaults: VideoStyleControls = {
+  marginTop: 0,
+  marginBottom: 16,
+  borderRadius: 8,
+  aspectRatio: 16 / 9,
+  backgroundColor: '#000000',
+};
+
 export type TableStyleControls = {
   fontSize: number;
   fontFamily: string;
@@ -372,6 +388,23 @@ export const linkVariantsDemoDefaults: LinkVariantsDemoControls = {
   channelVariantBackgroundColor: '#e6f4ea',
 };
 
+// Isolates the per-variant fontFamily override: a base link font plus two
+// variants that each swap in their own family. Unmatched links fall back to
+// the base font.
+export type LinkVariantFontControls = {
+  fontFamily: string;
+  color: string;
+  userVariantFontFamily: string;
+  docsVariantFontFamily: string;
+};
+
+export const linkVariantFontDefaults: LinkVariantFontControls = {
+  fontFamily: 'Montserrat-Regular',
+  color: '#2563eb',
+  userVariantFontFamily: 'CourierPrime-Regular',
+  docsVariantFontFamily: 'Poppins-SemiBold',
+};
+
 export type InlineCodeStyleControls = {
   fontFamily: string;
   fontSize: number;
@@ -492,6 +525,12 @@ export const EXAMPLE_FONT_FAMILIES = [
   'Montserrat-Medium',
   'Montserrat-Italic',
   'CourierPrime-Regular',
+  // Poppins ships a nonzero lineGap, which surfaced the iOS descender clip in
+  // issue #770 - keep it selectable for regression checks.
+  'Poppins-Regular',
+  'Poppins-Medium',
+  'Poppins-SemiBold',
+  'Poppins-Italic',
 ] as const;
 
 const EXAMPLE_FONT_FAMILY_LABELS: Record<
@@ -505,6 +544,10 @@ const EXAMPLE_FONT_FAMILY_LABELS: Record<
   'Montserrat-Medium': 'Montserrat Medium',
   'Montserrat-Italic': 'Montserrat Italic',
   'CourierPrime-Regular': 'Courier Prime',
+  'Poppins-Regular': 'Poppins Regular',
+  'Poppins-Medium': 'Poppins Medium',
+  'Poppins-SemiBold': 'Poppins SemiBold',
+  'Poppins-Italic': 'Poppins Italic',
 };
 
 export function fontFamilyControl(description: string) {

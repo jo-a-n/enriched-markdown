@@ -11,6 +11,7 @@ import type {
   InlineImageStyleControls,
   InlineMathStyleControls,
   LinkStyleControls,
+  LinkVariantFontControls,
   LinkVariantsDemoControls,
   ListStyleControls,
   MathStyleControls,
@@ -26,6 +27,7 @@ import type {
   TaskListStyleControls,
   ThematicBreakStyleControls,
   UnderlineStyleControls,
+  VideoStyleControls,
 } from './storybookMarkdownStyles';
 
 /**
@@ -189,6 +191,18 @@ export function toImageStyle(
   };
 }
 
+export function toVideoStyle(
+  controls: VideoStyleControls
+): NonNullable<MarkdownStyle['video']> {
+  return {
+    marginTop: controls.marginTop,
+    marginBottom: controls.marginBottom,
+    borderRadius: controls.borderRadius,
+    ...(controls.aspectRatio > 0 ? { aspectRatio: controls.aspectRatio } : {}),
+    backgroundColor: controls.backgroundColor,
+  };
+}
+
 export function toTableStyle(
   controls: TableStyleControls
 ): NonNullable<MarkdownStyle['table']> {
@@ -325,6 +339,29 @@ export function toLinkVariantsDemoStyle(
         color: channelVariantColor,
         underline: channelVariantUnderline,
         backgroundColor: channelVariantBackgroundColor,
+      },
+    },
+  };
+}
+
+export function toLinkVariantFontStyle(
+  controls: LinkVariantFontControls
+): Pick<MarkdownStyle, 'link' | 'linkVariants'> {
+  return {
+    link: {
+      ...(controls.fontFamily ? { fontFamily: controls.fontFamily } : {}),
+      color: controls.color,
+    },
+    linkVariants: {
+      '^user:': {
+        ...(controls.userVariantFontFamily
+          ? { fontFamily: controls.userVariantFontFamily }
+          : {}),
+      },
+      '^https://example\\.com/': {
+        ...(controls.docsVariantFontFamily
+          ? { fontFamily: controls.docsVariantFontFamily }
+          : {}),
       },
     },
   };

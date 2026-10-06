@@ -3,15 +3,15 @@ import XCTest
 @testable import EnrichedMarkdown
 
 final class HTMLGeneratorTests: XCTestCase {
-    private var config: MarkdownStyleConfig!
+    private var config: MarkdownStyleConfiguration!
 
     override func setUp() {
         super.setUp()
-        config = MarkdownStyleConfig.resolve(layers: [.default], traitCollection: .current)
+        config = MarkdownStyleConfiguration.resolve(layers: [.default], traitCollection: .current)
     }
 
-    private func html(for markdown: String, flags: Md4cFlags = .commonMark) -> String {
-        let rendered = MarkdownRenderer.render(markdown, config: config, flags: flags)
+    private func html(for markdown: String, options: MarkdownParsingOptions = .commonMark) -> String {
+        let rendered = MarkdownRenderer.render(markdown, config: config, options: options)
         return MarkdownHTMLGenerator.generateHTML(
             from: rendered,
             in: NSRange(location: 0, length: rendered.length),
@@ -69,21 +69,30 @@ final class HTMLGeneratorTests: XCTestCase {
     }
 
     func testUnderlineEmitsU() {
-        let result = html(for: "__under__", flags: Md4cFlags(underline: true))
+        let result = html(for: "__under__", options: MarkdownParsingOptions(underline: true))
 
         XCTAssertTrue(result.contains("<u>under</u>"))
     }
 
     func testSuperscriptEmitsSup() {
-        let result = html(for: "x^2^", flags: Md4cFlags(superscript: true))
+        let result = html(for: "x^2^", options: MarkdownParsingOptions(superscript: true))
 
         XCTAssertTrue(result.contains("<sup>2</sup>"))
     }
 
     func testSubscriptEmitsSub() {
-        let result = html(for: "H~2~O", flags: Md4cFlags(subscript: true))
+        let result = html(for: "H~2~O", options: MarkdownParsingOptions(subscript: true))
 
         XCTAssertTrue(result.contains("<sub>2</sub>"))
+    }
+
+    func testHighlightEmitsMarkWithBackground() {
+        config.highlight.backgroundColor = UIColor(red: 1, green: 0, blue: 0, alpha: 1)
+        config.highlight.foregroundColor = nil
+
+        let result = html(for: "==marked==", options: MarkdownParsingOptions(highlight: true))
+
+        XCTAssertTrue(result.contains("<mark style=\"background-color: #FF0000;\">marked</mark>"))
     }
 
     func testLinkCarriesHrefAndStyle() {
@@ -145,6 +154,42 @@ final class HTMLGeneratorTests: XCTestCase {
         XCTAssertEqual(result.components(separatedBy: "<blockquote").count - 1, 2)
         XCTAssertEqual(result.components(separatedBy: "</blockquote>").count - 1, 2)
         XCTAssertTrue(result.contains("padding-inline-start:"))
+    }
+
+    func testAdmonitionEmitsTintedCalloutWithIconHeader() {
+        let result = html(for: "> [!NOTE]\n> body", options: MarkdownParsingOptions(admonitions: true))
+
+        XCTAssertEqual(result.components(separatedBy: "<blockquote").count - 1, 1)
+        XCTAssertTrue(result.contains("border-inline-start: 3px solid #0969DA;"), result)
+        XCTAssertTrue(result.contains("background-color: transparent;"))
+        XCTAssertTrue(result.contains("<svg width=\"17\" height=\"17\" viewBox=\"0 0 16 16\" fill=\"#0969DA\""))
+        XCTAssertTrue(result.contains("<span>Note</span></div><p style="))
+        XCTAssertTrue(result.contains("body</p></blockquote>"))
+        XCTAssertFalse(result.contains(">Note</p>"))
+    }
+
+    func testAdmonitionBackgroundComesFromTheme() {
+        config.blockquote.admonitions[.tip]?.backgroundColor = UIColor(red: 1, green: 0, blue: 0, alpha: 1)
+        let result = html(for: "> [!TIP]\n> body", options: MarkdownParsingOptions(admonitions: true))
+
+        XCTAssertTrue(result.contains("background-color: #FF0000; border-inline-start: 3px solid #1A7F37;"), result)
+    }
+
+    func testNestedAdmonitionOpensItsOwnCallout() {
+        let result = html(for: "> [!WARNING]\n> outer\n>\n> > [!TIP]\n> > inner", options: MarkdownParsingOptions(admonitions: true))
+
+        XCTAssertEqual(result.components(separatedBy: "<blockquote").count - 1, 2)
+        XCTAssertEqual(result.components(separatedBy: "</blockquote>").count - 1, 2)
+        XCTAssertTrue(result.contains("<span>Warning</span>"))
+        XCTAssertTrue(result.contains("<span>Tip</span>"))
+        XCTAssertTrue(result.contains("outer</p><blockquote style=\"background-color: transparent; border-inline-start: 3px solid #1A7F37;"), result)
+    }
+
+    func testAdmonitionAfterSiblingQuoteAtSameDepthStartsANewCallout() {
+        let result = html(for: "> [!NOTE]\n> a\n>\n> > plain\n>\n> > [!TIP]\n> > b", options: MarkdownParsingOptions(admonitions: true))
+
+        XCTAssertEqual(result.components(separatedBy: "<blockquote").count - 1, 3)
+        XCTAssertTrue(result.contains("plain</p></blockquote><blockquote style=\"background-color: transparent;"), result)
     }
 
     func testUnorderedList() {
@@ -240,18 +285,25 @@ final class HTMLGeneratorTests: XCTestCase {
         XCTAssertTrue(result.contains("<br>"))
     }
 
-    func testRTLWrapsDocumentInDirectionalDiv() {
-        let rendered = MarkdownRenderer.render("مرحبا", config: config)
-        let result = MarkdownHTMLGenerator.generateHTML(
-            from: rendered,
-            in: NSRange(location: 0, length: rendered.length),
-            config: config,
-            isRTL: true
-        )
+    func testRTLFirstParagraphWrapsDocumentInDirectionalDiv() {
+        let result = html(for: "مرحبا\n\nHello")
 
         XCTAssertTrue(result.hasPrefix("<html dir=\"rtl\">"))
         XCTAssertTrue(result.contains("direction: rtl"))
         XCTAssertTrue(result.hasSuffix("</div></html>"))
+    }
+
+    func testUnresolvedDirectionMarksDocumentAuto() {
+        let rendered = MarkdownRenderer.render("مرحبا", config: config, writingDirection: .natural)
+        let result = MarkdownHTMLGenerator.generateHTML(
+            from: rendered,
+            in: NSRange(location: 0, length: rendered.length),
+            config: config
+        )
+
+        XCTAssertTrue(result.hasPrefix("<html dir=\"auto\">"))
+        XCTAssertFalse(result.contains("<div"))
+        XCTAssertTrue(result.hasSuffix("</html>"))
     }
 
     func testPartialRangeGeneratesOnlySelection() {
@@ -266,12 +318,12 @@ final class HTMLGeneratorTests: XCTestCase {
 }
 
 final class MarkdownTextViewCopyTests: XCTestCase {
-    private var config: MarkdownStyleConfig!
+    private var config: MarkdownStyleConfiguration!
     private var pasteboard: UIPasteboard!
 
     override func setUp() {
         super.setUp()
-        config = MarkdownStyleConfig.resolve(layers: [.default], traitCollection: .current)
+        config = MarkdownStyleConfiguration.resolve(layers: [.default], traitCollection: .current)
         // UIPasteboard.general is not accessible from a headless test process.
         pasteboard = UIPasteboard.withUniqueName()
     }
@@ -298,6 +350,26 @@ final class MarkdownTextViewCopyTests: XCTestCase {
         XCTAssertNotNil(item)
         XCTAssertTrue((item?["public.utf8-plain-text"] as? String)?.contains("bold text") == true)
         XCTAssertTrue((item?["public.html"] as? String)?.contains("<strong>bold</strong>") == true)
+    }
+
+    func testCopyMarksHTMLWithTheFirstSelectedParagraphDirection() {
+        let textView = makeTextView(markdown: "مرحبا\n\nHello")
+        textView.selectedRange = NSRange(location: 0, length: textView.attributedText.length)
+
+        textView.copy(nil)
+
+        XCTAssertTrue((pasteboard.items.first?["public.html"] as? String)?.hasPrefix("<html dir=\"rtl\">") == true)
+    }
+
+    func testCopyOfLeftToRightSelectionLeavesHTMLUndirected() {
+        let textView = makeTextView(markdown: "مرحبا\n\nHello")
+        textView.selectedRange = (textView.attributedText.string as NSString).range(of: "Hello")
+
+        textView.copy(nil)
+
+        let html = pasteboard.items.first?["public.html"] as? String
+        XCTAssertTrue(html?.hasPrefix("<html>") == true)
+        XCTAssertFalse(html?.contains("dir=") == true)
     }
 
     func testCopyWithEmptySelectionWritesNoFlavors() {

@@ -12,7 +12,7 @@ A multi-platform SDK for rendering Markdown as native text and editing rich text
 - **Rich text input** — Text input with Markdown output, inline formatting, headings, lists, links, and mentions
 - **Cross-platform** — Consistent API across React Native (TypeScript), iOS (Swift), and Android (Kotlin)
 - **CommonMark & GFM** — Full CommonMark compliance with GitHub Flavored Markdown extensions (tables, task lists, strikethrough)
-- **LaTeX math** — Block and inline math rendering powered by [RaTeX](https://github.com/erweixin/RaTeX)
+- **LaTeX math** — Block and inline math rendering powered by [RaTeX](https://ratex.lites.dev/)
 - **Markdown streaming** — Real-time streaming support for AI/LLM chat interfaces
 - **Code syntax highlighting** — Native syntax highlighting powered by [tree-sitter](https://tree-sitter.github.io/tree-sitter/)
 - **Accessibility** — VoiceOver on iOS, TalkBack on Android, semantic HTML on web
@@ -24,7 +24,7 @@ See the [feature comparison table](https://enriched.swmansion.com/markdown/#comp
 | Platform | Package | README |
 |----------|---------|--------|
 | React Native | [![npm](https://img.shields.io/npm/v/react-native-enriched-markdown)](https://www.npmjs.com/package/react-native-enriched-markdown) | [React Native](./packages/react-native-enriched-markdown/README.md) |
-| Android | [![Maven Central](https://img.shields.io/maven-central/v/com.swmansion.enriched.markdown/ui)](https://central.sonatype.com/artifact/com.swmansion.enriched.markdown/ui) | [Android](./packages/android-enriched-markdown/README.md) |
+| Android | [![Maven Central](https://img.shields.io/maven-central/v/com.swmansion.enriched.markdown/ui)](https://central.sonatype.com/artifact/com.swmansion.enriched.markdown/ui) | [Android](./packages/enriched-markdown-android/README.md) |
 | iOS | [![swift package](https://img.shields.io/github/v/tag/software-mansion-labs/enriched-markdown-ios?label=swift%20package)](https://github.com/software-mansion-labs/enriched-markdown-ios) | [iOS](./packages/enriched-markdown-ios/README.md) |
 
 
@@ -50,7 +50,7 @@ import { Linking } from 'react-native';
 
 ```kotlin
 dependencies {
-  implementation("com.swmansion.enriched.markdown:compose:0.1.0")
+  implementation("com.swmansion.enriched.markdown:compose:0.2.0")
 }
 ```
 
@@ -61,7 +61,7 @@ import com.swmansion.enriched.markdown.compose.MarkdownTheme
 MarkdownTheme {
   EnrichedMarkdownText(
     markdown = "# Hello\n\nThis is **enriched** [markdown](https://commonmark.org).",
-    onLinkPress = { url -> /* open url */ },
+    onLinkClick = { url -> /* open url */ },
   )
 }
 ```

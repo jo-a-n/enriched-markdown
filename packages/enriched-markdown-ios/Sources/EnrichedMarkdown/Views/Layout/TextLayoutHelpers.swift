@@ -1,24 +1,58 @@
 import UIKit
 
-struct BlockDrawContext {
+/// What one decoration pass draws with: the paragraphs it covers, the text
+/// and layout they came from (for a drawer that must see past them), and
+/// where the container's origin sits in the drawing.
+struct DecorationDrawContext {
     let context: CGContext
+    let paragraphs: [ParagraphLayout]
     let textStorage: NSTextStorage
     let textLayoutManager: NSTextLayoutManager
-    let contentManager: NSTextContentManager
     let containerWidth: CGFloat
     let origin: CGPoint
-    let visibleCharacterRange: NSRange
     let decorationConfig: BlockDecorationConfig
 }
 
-struct ListDrawContext {
-    let context: CGContext
-    let textStorage: NSTextStorage
-    let textLayoutManager: NSTextLayoutManager
-    let contentManager: NSTextContentManager
-    let origin: CGPoint
-    let visibleCharacterRange: NSRange
-    let decorationConfig: BlockDecorationConfig
+/// Where a paragraph's marker column ends (`markerX`, a gap before the text
+/// in LTR or after it in RTL) and where its first line's visual baseline
+/// sits, in decoration-view coordinates.
+struct ParagraphMarkerLayout {
+    let markerX: CGFloat
+    let visualBaselineY: CGFloat
+
+    init(paragraph: ParagraphLayout, gap: CGFloat, isRTL: Bool, origin: CGPoint) {
+        let attrs = paragraph.attributes
+        let paragraphStyle = attrs[.paragraphStyle] as? NSParagraphStyle
+        let textStartX = paragraphStyle?.headIndent ?? paragraphStyle?.firstLineHeadIndent ?? 0
+        let font = (attrs[.font] as? UIFont) ?? UIFont.systemFont(ofSize: 16)
+        var segmentFrame = CGRect(x: textStartX, y: 0, width: 0, height: 0)
+        var baselineFromLineTop = font.ascender
+
+        if let firstLine = paragraph.lines.first {
+            segmentFrame = firstLine.bounds
+            baselineFromLineTop = firstLine.baselineOffset
+        }
+
+        let layoutBaselineY = origin.y + segmentFrame.minY + baselineFromLineTop
+        let baselineOffset = CGFloat((attrs[.baselineOffset] as? NSNumber)?.doubleValue ?? 0)
+        visualBaselineY = layoutBaselineY - baselineOffset
+
+        if isRTL {
+            let textEndX = max(segmentFrame.maxX, textStartX)
+            markerX = origin.x + textEndX + gap
+        } else {
+            let textOriginX = segmentFrame.width > 0 ? segmentFrame.minX : textStartX
+            markerX = origin.x + textOriginX - gap
+        }
+    }
+
+    /// A `size` square whose trailing edge sits at the marker boundary,
+    /// centered on the first line's cap height.
+    func markerRect(size: CGFloat, font: UIFont, isRTL: Bool) -> CGRect {
+        let originX = isRTL ? markerX : markerX - size
+        let centerY = visualBaselineY - font.capHeight / 2
+        return CGRect(x: originX, y: centerY - size / 2, width: size, height: size)
+    }
 }
 
 enum TextLayoutHelpers {
@@ -44,6 +78,28 @@ enum TextLayoutHelpers {
             return nil
         }
         return NSTextRange(location: startLocation, end: endLocation)
+    }
+
+    /// Calls `body` with the view-space frame, character range and baseline
+    /// (from the frame's top) of each TextKit 2 segment of `range`, one per
+    /// line piece in reading order, laying out on demand.
+    static func enumerateSegmentFrames(
+        of range: NSRange,
+        in textView: UITextView,
+        _ body: (CGRect, NSRange, CGFloat) -> Void
+    ) {
+        guard let textLayoutManager = textView.textLayoutManager,
+              let contentManager = textLayoutManager.textContentManager,
+              let textRange = textRange(range, in: contentManager)
+        else { return }
+
+        let inset = textView.textContainerInset
+        textLayoutManager.ensureLayout(for: textRange)
+        textLayoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { segment, frame, baseline, _ in
+            guard let segment, let segmentRange = nsRange(segment, in: contentManager) else { return true }
+            body(frame.offsetBy(dx: inset.left, dy: inset.top), segmentRange, baseline)
+            return true
+        }
     }
 
     static func rangesIntersect(_ lhs: NSRange, _ rhs: NSRange) -> Bool {

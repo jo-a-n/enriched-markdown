@@ -34,17 +34,22 @@ export type {
   OnEndMentionEvent,
 } from './EnrichedMarkdownTextInputNativeComponent';
 import type {
+  GestureResponderEvent,
   HostInstance,
   NativeSyntheticEvent,
+  TextInputProps,
   ViewProps,
   ViewStyle,
   TextStyle,
   ColorValue,
 } from 'react-native';
+import { Platform } from 'react-native';
+import { normalizeMarkdownShortcuts } from './normalizeMarkdownShortcuts';
 import { normalizeMarkdownTextInputStyle } from './normalizeMarkdownTextInputStyle';
 import { normalizeMenuItem } from './normalizeMenuItem';
 import { toNativeRegexConfig } from './utils/regexParser';
 import { TextInputState } from './utils/textInputState';
+import { usePressability } from './utils/usePressability';
 import type { RefObject } from 'react';
 
 type NativeRef = HostInstance;
@@ -200,10 +205,27 @@ export interface FormatMenuConfig {
   link?: MenuItem;
 }
 
-export interface EnrichedMarkdownTextInputProps extends Omit<
-  ViewProps,
-  'style' | 'children'
-> {
+/**
+ * Which typed markdown block prefixes convert into blocks. An omitted key is
+ * off, so `{ heading: true }` enables headings and nothing else.
+ */
+export interface MarkdownShortcutsConfig {
+  /** `#`–`######` + space. @default false */
+  heading?: boolean;
+  /** `-`/`*`/`+` + space. @default false */
+  unorderedList?: boolean;
+  /** `1.` or `1)` + space. @default false */
+  orderedList?: boolean;
+}
+
+export interface EnrichedMarkdownTextInputProps
+  extends
+    Omit<ViewProps, 'style' | 'children'>,
+    // Same press props as React Native TextInput; `hitSlop` comes from ViewProps.
+    Pick<
+      TextInputProps,
+      'onPress' | 'onPressIn' | 'onPressOut' | 'rejectResponderTermination'
+    > {
   ref?: RefObject<EnrichedMarkdownTextInputInstance | null>;
   defaultValue?: string;
   placeholder?: string;
@@ -211,6 +233,17 @@ export interface EnrichedMarkdownTextInputProps extends Omit<
   editable?: boolean;
   autoFocus?: boolean;
   scrollEnabled?: boolean;
+  /**
+   * Converts markdown block prefixes typed at the start of a paragraph into
+   * blocks, the way Notion, Bear and Obsidian do: `#`–`######` + space becomes
+   * a heading, `-`/`*`/`+` + space a bullet item, `1.` (or `1)`) + space a
+   * numbered item. The prefix and its space are removed from the text.
+   * `true` enables all three; pass a {@link MarkdownShortcutsConfig} to enable
+   * a subset. Off by default so apps that treat `#` or `-` as literal text
+   * (tags, dashes) see no change.
+   * @default false
+   */
+  markdownShortcuts?: boolean | MarkdownShortcutsConfig;
   autoCapitalize?: string;
   multiline?: boolean;
   cursorColor?: ColorValue;
@@ -298,6 +331,7 @@ export const EnrichedMarkdownTextInput = ({
   editable = true,
   autoFocus = false,
   scrollEnabled = true,
+  markdownShortcuts,
   autoCapitalize = 'sentences',
   multiline = true,
   cursorColor,
@@ -316,6 +350,11 @@ export const EnrichedMarkdownTextInput = ({
   onEndMention,
   onFocus,
   onBlur,
+  onPress,
+  onPressIn,
+  onPressOut,
+  hitSlop,
+  rejectResponderTermination = true,
   contextMenuItems,
   selectionMenuConfig,
   formatMenuConfig,
@@ -444,6 +483,11 @@ export const EnrichedMarkdownTextInput = ({
     };
   }, [formatMenuConfig]);
 
+  const normalizedMarkdownShortcuts = useMemo(
+    () => normalizeMarkdownShortcuts(markdownShortcuts),
+    [markdownShortcuts]
+  );
+
   const linkRegex = useMemo(
     () => toNativeRegexConfig(_linkRegex),
     [_linkRegex]
@@ -552,6 +596,51 @@ export const EnrichedMarkdownTextInput = ({
     TextInputState.blurInput(nativeRef.current);
     onBlur?.();
   }, [onBlur]);
+
+  /**
+   * React Native TextInput attaches usePressability to the native host so taps
+   * claim the JS touch responder and ancestor Pressable handlers do not also
+   * run.
+   * https://github.com/react/react-native/blob/v0.86.2/packages/react-native/Libraries/Components/TextInput/TextInput.js#L582-L616
+   */
+  const pressabilityConfig = useMemo(
+    () => ({
+      cancelable:
+        Platform.OS === 'ios' ? !rejectResponderTermination : undefined,
+      hitSlop,
+      onPress: (event: GestureResponderEvent) => {
+        onPress?.(event);
+        if (editable !== false) {
+          // Same call TextInput's host focus() makes. A tap on the text view
+          // focuses it natively, which makes this a no-op; it matters when the
+          // press lands outside the native view, e.g. in the hitSlop area.
+          TextInputState.focusTextInput(nativeRef.current);
+        }
+      },
+      onPressIn,
+      onPressOut,
+    }),
+    [
+      editable,
+      hitSlop,
+      onPress,
+      onPressIn,
+      onPressOut,
+      rejectResponderTermination,
+    ]
+  );
+
+  // TextInput handles onBlur and onFocus events
+  // so omitting onBlur and onFocus pressability handlers here.
+  //
+  // Same logic as https://github.com/react/react-native/blob/v0.86.2/packages/react-native/Libraries/Components/TextInput/TextInput.js#L629
+  const {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    onBlur: _onBlur,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    onFocus: _onFocus,
+    ...pressabilityHandlers
+  } = usePressability(pressabilityConfig) ?? {};
 
   const handleRequestMarkdownResult = useCallback(
     (e: NativeSyntheticEvent<OnRequestMarkdownResultEvent>) => {
@@ -664,6 +753,7 @@ export const EnrichedMarkdownTextInput = ({
       editable={editable}
       autoFocus={autoFocus}
       scrollEnabled={scrollEnabled}
+      markdownShortcuts={normalizedMarkdownShortcuts}
       autoCapitalize={autoCapitalize}
       multiline={multiline}
       cursorColor={cursorColor}
@@ -702,7 +792,11 @@ export const EnrichedMarkdownTextInput = ({
       onStartMention={handleStartMention as NativeProps['onStartMention']}
       onChangeMention={handleChangeMention as NativeProps['onChangeMention']}
       onEndMention={handleEndMention as NativeProps['onEndMention']}
+      // Explicitly pass through hitSlop because the native view subclasses
+      // RCTViewComponentView and makes use of hitSlop too
+      hitSlop={hitSlop}
       {...rest}
+      {...pressabilityHandlers}
     />
   );
 };

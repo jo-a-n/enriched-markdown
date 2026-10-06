@@ -560,7 +560,8 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
         const auto &newVariant = newStyle.linkVariants[i];
         const auto &oldVariant = oldStyle.linkVariants[i];
         if (newVariant.pattern != oldVariant.pattern || newVariant.color != oldVariant.color ||
-            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor) {
+            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor ||
+            newVariant.fontFamily != oldVariant.fontFamily) {
           linkVariantsChanged = YES;
           break;
         }
@@ -573,6 +574,7 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
         variant.pattern = [[NSString alloc] initWithUTF8String:entry.pattern.c_str()];
         variant.color = RCTUIColorFromSharedColor(entry.color);
         variant.underline = entry.underline;
+        variant.fontFamily = [[NSString alloc] initWithUTF8String:entry.fontFamily.c_str()];
         RCTUIColor *backgroundColor = RCTUIColorFromSharedColor(entry.backgroundColor);
         variant.backgroundColor = CGColorGetAlpha(backgroundColor.CGColor) > 0 ? backgroundColor : nil;
         [variants addObject:variant];
@@ -757,6 +759,33 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
 
   if (newStyle.image.marginBottom != oldStyle.image.marginBottom) {
     [config setImageMarginBottom:newStyle.image.marginBottom];
+    changed = YES;
+  }
+
+  // ── Video ───────────────────────────────────────────────────────────────────
+
+  if (newStyle.video.marginTop != oldStyle.video.marginTop) {
+    [config setVideoMarginTop:newStyle.video.marginTop];
+    changed = YES;
+  }
+
+  if (newStyle.video.marginBottom != oldStyle.video.marginBottom) {
+    [config setVideoMarginBottom:newStyle.video.marginBottom];
+    changed = YES;
+  }
+
+  if (newStyle.video.borderRadius != oldStyle.video.borderRadius) {
+    [config setVideoBorderRadius:newStyle.video.borderRadius];
+    changed = YES;
+  }
+
+  if (newStyle.video.aspectRatio != oldStyle.video.aspectRatio) {
+    [config setVideoAspectRatio:newStyle.video.aspectRatio];
+    changed = YES;
+  }
+
+  if (newStyle.video.backgroundColor != oldStyle.video.backgroundColor) {
+    [config setVideoBackgroundColor:RCTUIColorFromSharedColor(newStyle.video.backgroundColor)];
     changed = YES;
   }
 

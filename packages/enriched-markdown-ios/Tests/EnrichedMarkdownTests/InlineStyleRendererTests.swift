@@ -4,11 +4,11 @@ import XCTest
 @testable import EnrichedMarkdown
 
 final class InlineStyleRendererTests: XCTestCase {
-    private var config: MarkdownStyleConfig!
+    private var config: MarkdownStyleConfiguration!
 
     override func setUp() {
         super.setUp()
-        config = MarkdownStyleConfig.baseline()
+        config = MarkdownStyleConfiguration.baseline()
     }
 
     // MARK: - Strikethrough
@@ -54,8 +54,8 @@ final class InlineStyleRendererTests: XCTestCase {
     }
 
     func testUnderscoreRendersUnderlineWithFlag() {
-        let flags = Md4cFlags(underline: true)
-        let result = MarkdownRenderer.render("_under_", config: config, flags: flags)
+        let options = MarkdownParsingOptions(underline: true)
+        let result = MarkdownRenderer.render("_under_", config: config, options: options)
 
         let range = rangeOfWord("under", in: result)
         let font = result.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
@@ -64,8 +64,8 @@ final class InlineStyleRendererTests: XCTestCase {
     }
 
     func testDoubleUnderscoreRendersUnderlineNotBoldWithFlag() {
-        let flags = Md4cFlags(underline: true)
-        let result = MarkdownRenderer.render("__under__", config: config, flags: flags)
+        let options = MarkdownParsingOptions(underline: true)
+        let result = MarkdownRenderer.render("__under__", config: config, options: options)
 
         let range = rangeOfWord("under", in: result)
         let font = result.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
@@ -74,7 +74,7 @@ final class InlineStyleRendererTests: XCTestCase {
     }
 
     func testParserEmitsUnderlineNodeOnlyWithFlag() {
-        let withFlag = Parser.shared.parseMarkdown("_under_", flags: Md4cFlags(underline: true))
+        let withFlag = Parser.shared.parseMarkdown("_under_", options: MarkdownParsingOptions(underline: true))
         XCTAssertNotNil(withFlag.first(ofType: .underline))
         XCTAssertNil(withFlag.first(ofType: .emphasis))
 
@@ -94,7 +94,7 @@ final class InlineStyleRendererTests: XCTestCase {
     func testParserEmitsSuperscriptAndSubscriptNodesOnlyWithFlags() {
         let withFlags = Parser.shared.parseMarkdown(
             "x^2^ H~2~O",
-            flags: Md4cFlags(superscript: true, subscript: true)
+            options: MarkdownParsingOptions(superscript: true, subscript: true)
         )
         XCTAssertNotNil(withFlags.first(ofType: .superscript))
         XCTAssertNotNil(withFlags.first(ofType: .subscript))
@@ -107,7 +107,7 @@ final class InlineStyleRendererTests: XCTestCase {
     // Baseline offsets are asserted relative to the surrounding text because
     // line-height centering may give every run a shared base offset.
     func testSuperscriptShrinksFontAndRaisesBaseline() {
-        let result = MarkdownRenderer.render("x^2^", config: config, flags: Md4cFlags(superscript: true))
+        let result = MarkdownRenderer.render("x^2^", config: config, options: MarkdownParsingOptions(superscript: true))
         XCTAssertFalse(result.string.contains("^"))
 
         let baseSize = fontSize(onWord: "x", in: result)
@@ -118,7 +118,7 @@ final class InlineStyleRendererTests: XCTestCase {
     }
 
     func testSubscriptShrinksFontAndLowersBaseline() {
-        let result = MarkdownRenderer.render("H~2~O", config: config, flags: Md4cFlags(subscript: true))
+        let result = MarkdownRenderer.render("H~2~O", config: config, options: MarkdownParsingOptions(subscript: true))
         XCTAssertFalse(result.string.contains("~"))
 
         let baseSize = fontSize(onWord: "H", in: result)
@@ -132,7 +132,7 @@ final class InlineStyleRendererTests: XCTestCase {
         let result = MarkdownRenderer.render(
             "x^**2**^",
             config: config,
-            flags: Md4cFlags(superscript: true)
+            options: MarkdownParsingOptions(superscript: true)
         )
 
         let range = rangeOfWord("2", in: result)
@@ -148,8 +148,8 @@ final class InlineStyleRendererTests: XCTestCase {
         scaledConfig.subscript.fontScale = 0.4
         scaledConfig.subscript.baselineOffsetScale = 0.3
 
-        let flags = Md4cFlags(superscript: true, subscript: true)
-        let result = MarkdownRenderer.render("a^s^ b~t~", config: scaledConfig, flags: flags)
+        let options = MarkdownParsingOptions(superscript: true, subscript: true)
+        let result = MarkdownRenderer.render("a^s^ b~t~", config: scaledConfig, options: options)
 
         let baseSize = fontSize(onWord: "a", in: result)
         let baseOffset = baselineOffset(onWord: "a", in: result)
@@ -161,7 +161,95 @@ final class InlineStyleRendererTests: XCTestCase {
         XCTAssertEqual(baselineOffset(onWord: "t", in: result) - baseOffset, -baseSize * 0.3, accuracy: 0.001)
     }
 
+    // MARK: - Highlight
+
+    func testEqualsRenderLiterallyWithoutFlag() {
+        let result = MarkdownRenderer.render("==marked== plain", config: config)
+        XCTAssertTrue(result.string.contains("==marked=="))
+
+        let withoutFlag = Parser.shared.parseMarkdown("==marked==")
+        XCTAssertNil(withoutFlag.first(ofType: .highlight))
+    }
+
+    func testHighlightAppliesBackgroundAndMarkerOnlyToSpan() {
+        var highlightConfig = config!
+        highlightConfig.highlight.backgroundColor = .systemYellow
+
+        let result = MarkdownRenderer.render(
+            "==marked== plain",
+            config: highlightConfig,
+            options: MarkdownParsingOptions(highlight: true)
+        )
+
+        XCTAssertEqual(backgroundColor(onWord: "marked", in: result), .systemYellow)
+        XCTAssertTrue(MarkdownAttributeValue.boolValue(from: attribute(MarkdownAttribute.highlight, onWord: "marked", in: result)))
+        XCTAssertNil(backgroundColor(onWord: "plain", in: result))
+        XCTAssertNil(attribute(MarkdownAttribute.highlight, onWord: "plain", in: result))
+    }
+
+    func testHighlightInheritsTextColorUnlessOverridden() {
+        let options = MarkdownParsingOptions(highlight: true)
+        let inherited = MarkdownRenderer.render("==marked==", config: config, options: options)
+        XCTAssertEqual(foregroundColor(onWord: "marked", in: inherited), config.paragraph.foregroundColor)
+
+        var coloredConfig = config!
+        coloredConfig.highlight.foregroundColor = .systemRed
+        let overridden = MarkdownRenderer.render("==marked==", config: coloredConfig, options: options)
+        XCTAssertEqual(foregroundColor(onWord: "marked", in: overridden), .systemRed)
+    }
+
+    func testHighlightPreservesBoldAndInlineCode() {
+        var highlightConfig = config!
+        highlightConfig.highlight.backgroundColor = .systemYellow
+        highlightConfig.code.backgroundColor = .systemGray
+
+        let result = MarkdownRenderer.render(
+            "==**both** and `code`==",
+            config: highlightConfig,
+            options: MarkdownParsingOptions(highlight: true)
+        )
+
+        let font = attribute(.font, onWord: "both", in: result) as? UIFont
+        XCTAssertTrue(font?.fontDescriptor.symbolicTraits.contains(.traitBold) == true)
+        XCTAssertEqual(backgroundColor(onWord: "both", in: result), .systemYellow)
+        XCTAssertEqual(backgroundColor(onWord: "code", in: result), .systemGray)
+    }
+
+    func testHighlightedLinkKeepsLinkColorOnHighlightBackground() {
+        var highlightConfig = config!
+        highlightConfig.highlight.backgroundColor = .systemYellow
+        highlightConfig.highlight.foregroundColor = .systemRed
+        highlightConfig.link.foregroundColor = .systemBlue
+
+        let result = MarkdownRenderer.render(
+            "==[press](https://swmansion.com)==",
+            config: highlightConfig,
+            options: MarkdownParsingOptions(highlight: true)
+        )
+
+        XCTAssertEqual(backgroundColor(onWord: "press", in: result), .systemYellow)
+        XCTAssertEqual(foregroundColor(onWord: "press", in: result), .systemBlue)
+    }
+
     // MARK: - Theme resolution
+
+    func testHighlightThemeElementResolves() {
+        let theme = MarkdownTheme {
+            Highlight()
+                .foregroundStyle(Color.black)
+                .background(Color.yellow)
+        }
+        let resolved = MarkdownStyleConfiguration.resolve(layers: [theme], traitCollection: .current)
+
+        XCTAssertNotNil(resolved.highlight.foregroundColor)
+        XCTAssertNotNil(resolved.highlight.backgroundColor)
+    }
+
+    func testDefaultThemeGivesHighlightABackground() {
+        let resolved = MarkdownStyleConfiguration.baseline()
+        XCTAssertNotNil(resolved.highlight.backgroundColor)
+        XCTAssertNil(resolved.highlight.foregroundColor)
+    }
 
     func testSuperscriptAndSubscriptThemeElementsResolve() {
         let theme = MarkdownTheme {
@@ -172,7 +260,7 @@ final class InlineStyleRendererTests: XCTestCase {
                 .fontScale(0.55)
                 .baselineOffsetScale(0.25)
         }
-        let resolved = MarkdownStyleConfig.resolve(layers: [theme], traitCollection: .current)
+        let resolved = MarkdownStyleConfiguration.resolve(layers: [theme], traitCollection: .current)
 
         XCTAssertEqual(resolved.superscript.fontScale, 0.6)
         XCTAssertEqual(resolved.superscript.baselineOffsetScale, 0.4)
@@ -187,7 +275,7 @@ final class InlineStyleRendererTests: XCTestCase {
             Underline()
                 .foregroundStyle(Color.blue)
         }
-        let resolved = MarkdownStyleConfig.resolve(layers: [theme], traitCollection: .current)
+        let resolved = MarkdownStyleConfiguration.resolve(layers: [theme], traitCollection: .current)
 
         XCTAssertNotNil(resolved.strikethrough.foregroundColor)
         XCTAssertNotNil(resolved.underline.foregroundColor)
@@ -196,15 +284,26 @@ final class InlineStyleRendererTests: XCTestCase {
     // MARK: - Helpers
 
     private func fontSize(onWord word: String, in attributed: NSAttributedString) -> CGFloat {
-        let range = rangeOfWord(word, in: attributed)
-        let font = attributed.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
+        let font = attribute(.font, onWord: word, in: attributed) as? UIFont
         XCTAssertNotNil(font, "expected a font on '\(word)'")
         return font?.pointSize ?? 0
     }
 
-    private func baselineOffset(onWord word: String, in attributed: NSAttributedString) -> CGFloat {
+    private func attribute(_ key: NSAttributedString.Key, onWord word: String, in attributed: NSAttributedString) -> Any? {
         let range = rangeOfWord(word, in: attributed)
-        let offset = attributed.attribute(.baselineOffset, at: range.location, effectiveRange: nil) as? NSNumber
+        return attributed.attribute(key, at: range.location, effectiveRange: nil)
+    }
+
+    private func backgroundColor(onWord word: String, in attributed: NSAttributedString) -> UIColor? {
+        attribute(.backgroundColor, onWord: word, in: attributed) as? UIColor
+    }
+
+    private func foregroundColor(onWord word: String, in attributed: NSAttributedString) -> UIColor? {
+        attribute(.foregroundColor, onWord: word, in: attributed) as? UIColor
+    }
+
+    private func baselineOffset(onWord word: String, in attributed: NSAttributedString) -> CGFloat {
+        let offset = attribute(.baselineOffset, onWord: word, in: attributed) as? NSNumber
         return CGFloat(offset?.doubleValue ?? 0)
     }
 

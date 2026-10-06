@@ -3,11 +3,11 @@ import XCTest
 @testable import EnrichedMarkdown
 
 final class MarkdownSourceSlicerTests: XCTestCase {
-    private var config: MarkdownStyleConfig!
+    private var config: MarkdownStyleConfiguration!
 
     override func setUp() {
         super.setUp()
-        config = MarkdownStyleConfig.baseline()
+        config = MarkdownStyleConfiguration.baseline()
     }
 
     /// Copy-as-Markdown result for the rendered selection matching
@@ -15,11 +15,11 @@ final class MarkdownSourceSlicerTests: XCTestCase {
     private func copyMarkdown(
         selecting substring: String,
         in source: String,
-        flags: Md4cFlags = .commonMark,
+        options: MarkdownParsingOptions = .commonMark,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> String? {
-        let rendered = MarkdownRenderer.render(source, config: config, flags: flags)
+        let rendered = MarkdownRenderer.render(source, config: config, options: options)
         let range = (rendered.string as NSString).range(of: substring)
         XCTAssertNotEqual(
             range.location, NSNotFound,
@@ -27,7 +27,7 @@ final class MarkdownSourceSlicerTests: XCTestCase {
             file: file, line: line
         )
         guard range.location != NSNotFound else { return nil }
-        return MarkdownExtractor.markdown(for: range, in: rendered, sourceMarkdown: source, flags: flags)
+        return MarkdownExtractor.markdown(for: range, in: rendered, sourceMarkdown: source, options: options)
     }
 
     // MARK: - Verbatim slices
@@ -81,6 +81,32 @@ final class MarkdownSourceSlicerTests: XCTestCase {
         )
     }
 
+    func testFullySelectedHighlightKeepsMarkers() {
+        XCTAssertEqual(
+            copyMarkdown(selecting: "marked", in: "some ==marked== text", options: MarkdownParsingOptions(highlight: true)),
+            "==marked=="
+        )
+    }
+
+    func testFullySelectedUnderlineKeepsUnderscoreMarkers() {
+        let options = MarkdownParsingOptions(underline: true)
+        XCTAssertEqual(
+            copyMarkdown(selecting: "double", in: "a __double__ b", options: options),
+            "__double__"
+        )
+        XCTAssertEqual(
+            copyMarkdown(selecting: "single", in: "a _single_ b", options: options),
+            "_single_"
+        )
+    }
+
+    func testSelectionSpanningUnderlineSpansKeepsAllMarkers() {
+        XCTAssertEqual(
+            copyMarkdown(selecting: "one and two", in: "x _one_ and __two__ y", options: MarkdownParsingOptions(underline: true)),
+            "_one_ and __two__"
+        )
+    }
+
     func testSoftBreakSurvivesAsSourceNewline() {
         XCTAssertEqual(
             copyMarkdown(selecting: "one line", in: "line one\nline two"),
@@ -125,6 +151,13 @@ final class MarkdownSourceSlicerTests: XCTestCase {
         )
     }
 
+    func testAdmonitionBodySelectionSlicesItsLine() {
+        XCTAssertEqual(
+            copyMarkdown(selecting: "quoted words", in: "intro\n\n> [!NOTE]\n> quoted words", options: MarkdownParsingOptions(admonitions: true)),
+            "> quoted words"
+        )
+    }
+
     func testHeadingSelectionKeepsHashesAndInlineMarkers() {
         XCTAssertEqual(
             copyMarkdown(selecting: "Big deal", in: "intro\n\n# Big **deal**"),
@@ -141,6 +174,19 @@ final class MarkdownSourceSlicerTests: XCTestCase {
 
     // MARK: - Fallback to reconstruction
 
+    /// The rendered title has no source bytes, so a selection covering it
+    /// reconstructs the alert instead of slicing.
+    func testAdmonitionTitleSelectionReconstructsTheMarker() {
+        XCTAssertEqual(
+            copyMarkdown(
+                selecting: "Note\nquoted words",
+                in: "intro\n\n> [!NOTE]\n> quoted words",
+                options: MarkdownParsingOptions(admonitions: true)
+            ),
+            "> [!NOTE]\n> quoted words"
+        )
+    }
+
     func testMidMarkerCutFallsBackToReconstruction() {
         XCTAssertEqual(
             copyMarkdown(selecting: "old wor", in: "hello **bold** world"),
@@ -152,6 +198,13 @@ final class MarkdownSourceSlicerTests: XCTestCase {
         XCTAssertEqual(
             copyMarkdown(selecting: "a*b and", in: "a\\*b and more\n\nplain"),
             "a\\*b and"
+        )
+    }
+
+    func testSelectionAcrossDroppedEntitySlicesVerbatim() {
+        XCTAssertEqual(
+            copyMarkdown(selecting: "an entity  2026", in: "next to an entity &copy; 2026 here"),
+            "an entity &copy; 2026"
         )
     }
 

@@ -213,6 +213,13 @@ const DEFAULT_NORMALIZED_STYLE = Object.freeze({
     marginTop: 0,
     marginBottom: 16,
   },
+  video: {
+    marginTop: 0,
+    marginBottom: 16,
+    borderRadius: 8,
+    aspectRatio: 16 / 9,
+    backgroundColor: normalizeColor('#000000')!,
+  },
   inlineImage: { size: 20 },
   thematicBreak: {
     color: normalizeColor('#E5E7EB')!,
@@ -332,6 +339,7 @@ export const normalizeMarkdownStyle = (
     ([pattern, override]): LinkVariantEntryInternal => {
       return {
         pattern,
+        fontFamily: override.fontFamily ?? linkBase.fontFamily,
         color: ((override.color ? normalizeColor(override.color) : null) ??
           linkBase.color) as string,
         underline: override.underline ?? linkBase.underline,

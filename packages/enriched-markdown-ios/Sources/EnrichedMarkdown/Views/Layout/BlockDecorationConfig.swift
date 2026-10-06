@@ -7,9 +7,11 @@ struct BlockDecorationConfig {
     var codeBlockBorderRadius: CGFloat = 8
     var codeBlockPadding: CGFloat = 16
 
+    static let defaultBlockquoteBorderColor = UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
+
     var blockquoteBorderWidth: CGFloat = 3
     var blockquoteGapWidth: CGFloat = 16
-    var blockquoteBorderColor: UIColor = UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
+    var blockquoteBorderColor: UIColor = defaultBlockquoteBorderColor
     var blockquoteBackgroundColor: UIColor = UIColor(red: 0.98, green: 0.98, blue: 0.99, alpha: 1)
 
     var listGapWidth: CGFloat = 12
@@ -24,7 +26,7 @@ struct BlockDecorationConfig {
     var taskBorderColor: UIColor = UIColor(red: 0.62, green: 0.62, blue: 0.62, alpha: 1)
     var taskCheckmarkColor: UIColor = .white
 
-    init(styleConfig: MarkdownStyleConfig) {
+    init(styleConfig: MarkdownStyleConfiguration) {
         applyCodeBlockStyle(from: styleConfig.codeBlock)
         applyBlockquoteStyle(from: styleConfig.blockquote)
         applyListStyle(from: styleConfig.list)
@@ -41,7 +43,7 @@ struct BlockDecorationConfig {
         if let width = style.borderWidth {
             codeBlockBorderWidth = width
         }
-        if let radius = style.borderRadius {
+        if let radius = style.cornerRadius {
             codeBlockBorderRadius = radius
         }
         if let padding = style.padding {
@@ -86,7 +88,7 @@ struct BlockDecorationConfig {
         if let size = style.checkboxSize {
             taskCheckboxSize = size
         }
-        if let radius = style.checkboxBorderRadius {
+        if let radius = style.checkboxCornerRadius {
             taskCheckboxBorderRadius = radius
         }
         if let color = style.checkedColor {

@@ -17,6 +17,8 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.TypedValue
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -61,15 +63,10 @@ class CodeBlockContainerView(
   override val segmentMarginTop: Int get() = codeBlockStyle.marginTop.toInt()
   override val segmentMarginBottom: Int get() = codeBlockStyle.marginBottom.toInt()
 
-  var copyLabel: String = ""
-    set(value) {
-      field = value
-      copyButton.contentDescription = value
-    }
-  var copyAsMarkdownLabel: String = ""
-  var enableBlockContextMenu: Boolean = true
-
-  var onCopyPress: ((code: String, language: String) -> Unit)? = null
+  // Shared, runtime-mutable block props read live at use-time (menu-open, tap);
+  // the root mutates the one instance in place, so this view and any sibling
+  // created later see the same current values. See DynamicBlockProps.
+  var dynamicProps: DynamicBlockProps = DynamicBlockProps()
 
   private var code: String = ""
   private var language: String? = null
@@ -127,8 +124,12 @@ class CodeBlockContainerView(
       setTextColor(secondaryColor(codeBlockStyle.color))
     }
 
+  // contentDescription reads the shared label live so a runtime label change is
+  // reflected for TalkBack without a push (mirrors the live block-menu reads).
   private val copyButton =
-    AppCompatImageButton(context).apply {
+    object : AppCompatImageButton(context) {
+      override fun getContentDescription(): CharSequence = dynamicProps.copyLabel
+    }.apply {
       background = null
       scaleType = ImageView.ScaleType.CENTER
       setImageDrawable(
@@ -145,6 +146,20 @@ class CodeBlockContainerView(
       color = dividerColor(codeBlockStyle.color)
       strokeWidth = context.resources.displayMetrics.density
     }
+
+  private val tapDetector =
+    GestureDetector(
+      context,
+      object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent): Boolean = true
+
+        override fun onSingleTapUp(e: MotionEvent): Boolean {
+          if (isPointInsideCopyButton(e.x, e.y)) return false
+          handleCodeBlockPress()
+          return false
+        }
+      },
+    )
 
   init {
     setWillNotDraw(false)
@@ -248,10 +263,10 @@ class CodeBlockContainerView(
   // Returns whether a menu was shown, so the long-press listener only consumes
   // the event when there is one (a pending block has no menu yet).
   private fun showContextMenu(anchor: View): Boolean {
-    if (!enableBlockContextMenu || pending) return false
+    if (!dynamicProps.enableBlockContextMenu || pending) return false
     ContextMenuPopup.show(anchor, this) {
-      item(ContextMenuPopup.Icon.COPY, copyLabel) { copyCode() }
-      item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) { copyFencedMarkdown() }
+      item(ContextMenuPopup.Icon.COPY, dynamicProps.copyLabel) { copyCode() }
+      item(ContextMenuPopup.Icon.DOCUMENT, dynamicProps.copyAsMarkdownLabel) { copyFencedMarkdown() }
     }
     return true
   }
@@ -259,8 +274,23 @@ class CodeBlockContainerView(
   private fun copyCode() {
     if (pending || code.isEmpty()) return
     copyToClipboard(code)
-    onCopyPress?.invoke(code, language ?: "")
+    dynamicProps.onCopyPress?.invoke(code, language ?: "")
   }
+
+  private fun handleCodeBlockPress() {
+    if (!dynamicProps.enableCodeBlockPress || pending) return
+    dynamicProps.onCodeBlockPress?.invoke(code, language ?: "")
+  }
+
+  override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+    tapDetector.onTouchEvent(ev)
+    return super.dispatchTouchEvent(ev)
+  }
+
+  private fun isPointInsideCopyButton(
+    x: Float,
+    y: Float,
+  ): Boolean = x >= copyButton.left && x < copyButton.right && y >= copyButton.top && y < copyButton.bottom
 
   private fun copyFencedMarkdown() {
     if (code.isEmpty()) return

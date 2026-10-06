@@ -27,6 +27,7 @@
 - 👤 Renders mentions as styled links (compatible with `EnrichedMarkdownTextInput` mention output)
 - 🙈 Spoiler text with animated particle overlay and tap-to-reveal
 - 🖼️ Native image interactions (iOS: Copy, Save to Camera Roll)
+- 🎬 Native video playback — block-level videos via HTML `<video>` tag
 - 🌐 Native platform features (Translate, Look Up, Search Web, Share)
 - 🗣️ Accessibility support (VoiceOver on iOS, TalkBack on Android, semantic HTML on web)
 - 🔄 Full RTL (right-to-left) support including text, lists, blockquotes, tables, and task lists
@@ -141,6 +142,7 @@ Add an `"enriched-markdown"` block to your app's `package.json` to configure whi
   "enriched-markdown": {
     "enableCodeHighlight": true,
     "enableMath": true,
+    "enableVideo": true,
     "codeHighlightLanguages": ["javascript", "typescript", "python", "swift", "kotlin"]
   }
 }
@@ -149,7 +151,8 @@ Add an `"enriched-markdown"` block to your app's `package.json` to configure whi
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enableCodeHighlight` | `boolean` | `true` | Download and compile tree-sitter grammars for syntax highlighting |
-| `enableMath` | `boolean` | `true` | Download RaTeX for LaTeX math rendering (iOS) and include the Maven dependency (Android) |
+| `enableMath` | `boolean` | `true` | Download [RaTeX](https://ratex.lites.dev/) for LaTeX math rendering (iOS) and include the Maven dependency (Android) |
+| `enableVideo` | `boolean` | `true` | Enable native video playback. Adds Media3 ExoPlayer (~2-3 MB) on Android; uses built-in AVKit on iOS. Set to `false` to exclude the dependency |
 | `codeHighlightLanguages` | `string[]` | all default grammars | Subset of languages to compile (reduces binary size). Ignored when `enableCodeHighlight` is `false`; an empty array `[]` compiles none (same as disabling). |
 
 Your app's `package.json` is the single source of truth. `postinstall` reads it to decide
@@ -259,7 +262,8 @@ We're actively working on expanding the capabilities of `react-native-enriched-m
 |             | 0.82 | 0.83 | 0.84 | 0.85 | 0.86 | 0.87 |
 | ----------- | :--: | :--: | :--: | :--: | :--: | :--: |
 | **nightly** |  ⛔  |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
-| **1.0.0**   |  ⛔  |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
+| **1.1.x**   |  ⛔  |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
+| **1.0.x**   |  ⛔  |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
 | **0.7.0**   |  ⛔  |  ✅  |  ✅  |  ✅  |  ✅  |  ✅  |
 | **0.6.0**   |  ⛔  |  ✅  |  ✅  |  ✅  |  ⛔  |  ⛔  |
 | **0.5.0**   |  ⛔  |  ✅  |  ✅  |  ✅  |  ⛔  |  ⛔  |

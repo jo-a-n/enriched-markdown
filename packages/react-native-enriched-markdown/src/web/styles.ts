@@ -59,6 +59,7 @@ export function zeroTrailingMargins(
     codeBlock: { ...style.codeBlock, marginBottom: 0 },
     thematicBreak: { ...style.thematicBreak, marginBottom: 0 },
     image: { ...style.image, marginBottom: 0 },
+    video: { ...style.video, marginBottom: 0 },
     math: { ...style.math, marginBottom: 0 },
     table: { ...style.table, marginBottom: 0 },
   };
@@ -240,6 +241,23 @@ function imageStyle(style: MarkdownStyleInternal): CSSProperties {
   return { ...base, width: '100%', height: image.height, objectFit };
 }
 
+function videoStyle(style: MarkdownStyleInternal): CSSProperties {
+  const video = style.video;
+  const base: CSSProperties = {
+    width: '100%',
+    maxWidth: '100%',
+    display: 'block',
+    borderRadius: video.borderRadius,
+    backgroundColor: video.backgroundColor,
+    marginTop: video.marginTop,
+    marginBottom: video.marginBottom,
+  };
+  if (video.aspectRatio > 0) {
+    base.aspectRatio = video.aspectRatio;
+  }
+  return base;
+}
+
 function inlineImageStyle(style: MarkdownStyleInternal): CSSProperties {
   const size = style.inlineImage.size;
   return {
@@ -330,7 +348,7 @@ export function linkStyleForUrl(
   const backgroundColor = resolved.backgroundColor;
   return {
     color: resolved.color,
-    fontFamily: normalizeFontFamily(base.fontFamily),
+    fontFamily: normalizeFontFamily(resolved.fontFamily),
     textDecoration: resolved.underline ? 'underline' : 'none',
     ...(backgroundColor && backgroundColor !== 'transparent'
       ? { backgroundColor }
@@ -569,6 +587,7 @@ export interface Styles {
   tableCell: Record<ColumnAlign, CSSProperties>;
   taskCheckbox: CSSProperties;
   taskCheckboxDisabled: CSSProperties;
+  video: CSSProperties;
 }
 
 type ColumnAlign = 'left' | 'center' | 'right' | 'default';
@@ -631,6 +650,7 @@ export function buildStyles(style: MarkdownStyleInternal): Styles {
     },
     taskCheckbox: taskCheckboxStyle(style),
     taskCheckboxDisabled: taskCheckboxDisabledStyle(style),
+    video: videoStyle(style),
   };
 
   stylesStore.set(style, result);

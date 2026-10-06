@@ -23,6 +23,18 @@ NSLineBreakStrategy ENRMResolveLineBreakStrategy(NSString *strategy)
   return NSLineBreakStrategyNone;
 }
 
+NSLineBreakMode ENRMResolveEllipsizeLineBreakMode(NSString *mode)
+{
+  if ([mode isEqualToString:@"head"]) {
+    return NSLineBreakByTruncatingHead;
+  } else if ([mode isEqualToString:@"middle"]) {
+    return NSLineBreakByTruncatingMiddle;
+  } else if ([mode isEqualToString:@"clip"]) {
+    return NSLineBreakByClipping;
+  }
+  return NSLineBreakByTruncatingTail;
+}
+
 __attribute__((constructor)) static void initParagraphStyleUtils(void)
 {
   kNewlineAttributedString = [[NSAttributedString alloc] initWithString:@"\n"];
@@ -150,6 +162,11 @@ void ENRMApplyWritingDirectionToParagraphStyles(NSMutableAttributedString *outpu
                     if (!style) {
                       return;
                     }
+                    // Skip runs already in the target direction (issue #739),
+                    // mirroring ENRMApplyFirstStrongParagraphDirections.
+                    if (style.baseWritingDirection == writingDirection) {
+                      return;
+                    }
                     NSNumber *isCodeBlock = [output attribute:CodeBlockAttributeName
                                                       atIndex:range.location
                                                effectiveRange:nil];
@@ -247,62 +264,55 @@ void applyBlockSpacingAfter(NSMutableAttributedString *output, CGFloat marginBot
   [output addAttribute:NSParagraphStyleAttributeName value:spacerStyle range:NSMakeRange(spacerLocation, 1)];
 }
 
-BOOL ENRMRangeContainsBlockImage(NSAttributedString *output, NSRange range)
+// UIKit's own key for the pre-substitution font. Not exported by any SDK header, so it is spelled out
+// here; it is the same string UIKit writes into a UITextView's storage when it substitutes a font.
+static NSString *const ENRMOriginalFontAttributeName = @"NSOriginalFont";
+
+void ENRMPinLineMetricsToStyledFonts(NSMutableAttributedString *output, NSRange range)
 {
-  __block BOOL found = NO;
-  [output enumerateAttribute:NSAttachmentAttributeName
+  if (range.length == 0 || NSMaxRange(range) > output.length) {
+    return;
+  }
+
+  [output enumerateAttribute:NSFontAttributeName
                      inRange:range
                      options:0
-                  usingBlock:^(id value, __unused NSRange attrRange, BOOL *stop) {
-                    if ([value isKindOfClass:[ENRMImageAttachment class]] && !((ENRMImageAttachment *)value).isInline) {
-                      found = YES;
-                      *stop = YES;
+                  usingBlock:^(UIFont *font, NSRange fontRange, __unused BOOL *stop) {
+                    if (font) {
+                      [output addAttribute:ENRMOriginalFontAttributeName value:font range:fontRange];
                     }
                   }];
-  return found;
 }
 
+// Floor, not clamp: minimumLineHeight keeps short lines at lineHeight, while maximumLineHeight = 0 lets
+// a line grow to fit a taller run (large inline code, math, images) instead of clipping it. We can
+// diverge from RN's clamp because we measure the real laid-out height, so grown lines are reserved.
 void applyLineHeight(NSMutableAttributedString *output, NSRange range, CGFloat lineHeight)
 {
   if (lineHeight <= 0) {
     return;
   }
 
-  __block BOOL hasMath = NO;
-
-#if ENRICHED_MARKDOWN_MATH
-  [output enumerateAttribute:NSAttachmentAttributeName
-                     inRange:range
-                     options:0
-                  usingBlock:^(id value, __unused NSRange attrRange, BOOL *stop) {
-                    if ([value isKindOfClass:[ENRMMathInlineAttachment class]]) {
-                      hasMath = YES;
-                      *stop = YES;
-                    }
-                  }];
-#endif
-
-  BOOL hasBlockImage = ENRMRangeContainsBlockImage(output, range);
-
   NSMutableParagraphStyle *style = getOrCreateParagraphStyle(output, range.location);
 
   style.minimumLineHeight = lineHeight;
-  style.maximumLineHeight = (hasMath || hasBlockImage) ? 0 : lineHeight;
+  style.maximumLineHeight = 0;
 
   [output addAttribute:NSParagraphStyleAttributeName value:style range:range];
 }
 
-// TODO: Extend baseline offset to every block that calls applyLineHeight (headings, blockquotes,
-// code blocks, list items). Keep per-block range scoping — not a whole-document pass like RN Text,
-// since blocks can use different line heights. Optionally consolidate into a single post-pass in
-// AttributedRenderer; evaluate RN's per-line mode (enableIOSTextBaselineOffsetPerLine) if needed.
+// Centers text within its line height by offsetting the baseline by half the leading, matching how
+// Android's LineHeightSpan splits the extra leading evenly above and below the glyphs. Called per
+// block over its own range so blocks can keep different line heights. Ranges that already carry a
+// baseline offset are left untouched, keeping nesting (e.g. a blockquote wrapping list items) idempotent.
 void applyBaselineOffset(NSMutableAttributedString *output, NSRange range)
 {
   if (range.length == 0) {
     return;
   }
 
-  // Math paragraphs leave maximumLineHeight at 0, so fall back to minimumLineHeight.
+  // applyLineHeight floors lines with minimumLineHeight (maximumLineHeight is 0 for grown lines,
+  // or equal to the minimum for re-clamped code blocks), so the target is the minimum line height.
   __block CGFloat targetLineHeight = 0;
   [output enumerateAttribute:NSParagraphStyleAttributeName
                      inRange:range
@@ -311,8 +321,7 @@ void applyBaselineOffset(NSMutableAttributedString *output, NSRange range)
                     if (!paragraphStyle) {
                       return;
                     }
-                    CGFloat clamp = MAX(paragraphStyle.maximumLineHeight, paragraphStyle.minimumLineHeight);
-                    targetLineHeight = MAX(clamp, targetLineHeight);
+                    targetLineHeight = MAX(paragraphStyle.minimumLineHeight, targetLineHeight);
                   }];
 
   if (targetLineHeight <= 0) {

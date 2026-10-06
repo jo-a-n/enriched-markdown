@@ -109,6 +109,7 @@ export interface LinkVariantEntryInternal {
   color: string;
   underline: boolean;
   backgroundColor: string;
+  fontFamily: string;
 }
 
 interface StrongStyleInternal {
@@ -147,6 +148,14 @@ interface ImageStyleInternal {
   borderRadius: number;
   marginTop: number;
   marginBottom: number;
+}
+
+interface VideoStyleInternal {
+  marginTop: number;
+  marginBottom: number;
+  borderRadius: number;
+  aspectRatio: number;
+  backgroundColor: string;
 }
 
 interface InlineImageStyleInternal {
@@ -248,6 +257,7 @@ export interface MarkdownStyleInternal {
   underline: UnderlineStyleInternal;
   code: CodeStyleInternal;
   image: ImageStyleInternal;
+  video: VideoStyleInternal;
   inlineImage: InlineImageStyleInternal;
   thematicBreak: ThematicBreakStyleInternal;
   table: TableStyleInternal;

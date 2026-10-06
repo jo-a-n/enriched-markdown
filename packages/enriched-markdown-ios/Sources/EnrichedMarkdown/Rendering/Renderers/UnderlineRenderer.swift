@@ -2,9 +2,9 @@ import UIKit
 
 final class UnderlineRenderer: NodeRenderer {
     private let factory: RendererFactory
-    private let config: MarkdownStyleConfig
+    private let config: MarkdownStyleConfiguration
 
-    init(factory: RendererFactory, config: MarkdownStyleConfig) {
+    init(factory: RendererFactory, config: MarkdownStyleConfiguration) {
         self.factory = factory
         self.config = config
     }
@@ -18,15 +18,8 @@ final class UnderlineRenderer: NodeRenderer {
 
         output.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
 
-        guard let underlineColor = config.underline.foregroundColor else { return }
-
-        output.enumerateAttributes(in: range, options: []) { attributes, subrange, _ in
-            guard !RenderContext.shouldPreserveColors(attributes) else { return }
-
-            let currentColor = attributes[.foregroundColor] as? UIColor
-            if currentColor != underlineColor {
-                output.addAttribute(.foregroundColor, value: underlineColor, range: subrange)
-            }
+        if let underlineColor = config.underline.foregroundColor {
+            RenderContext.applyForegroundColor(underlineColor, to: output, in: range)
         }
     }
 }

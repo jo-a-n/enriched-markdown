@@ -4,6 +4,7 @@
 #import "ENRMAsyncRenderCoordinator.h"
 #import "ENRMAtomicSize.h"
 #import "ENRMImageAttachment.h"
+#import "ENRMLatexErrorCoordinator.h"
 #import "ENRMMarkdownParser.h"
 #import "ENRMTailFadeInAnimator.h"
 #import "ENRMTextInteractionUtils.h"
@@ -18,8 +19,12 @@
 #if ENRICHED_MARKDOWN_MATH
 #import "ENRMMathContainerView.h"
 #endif
+#if ENRICHED_MARKDOWN_VIDEO
+#import "ENRMVideoContainerView.h"
+#endif
 #import "ENRMBlockquoteContainerView.h"
 #import "ENRMCodeBlockContainerView.h"
+#import "ENRMDynamicBlockProps.h"
 #import "ENRMSpoilerCapable.h"
 #import "ENRMSpoilerOverlayView.h"
 #import "ENRMSpoilerTapUtils.h"
@@ -34,6 +39,7 @@
 #import "MarkdownExtractor.h"
 #import "MeasurementCache.h"
 #import "ParagraphStyleUtils.h"
+#import "RenderContext.h"
 #import "RenderedMarkdownSegment.h"
 #import "RuntimeKeys.h"
 #import "SegmentReconciler.h"
@@ -77,11 +83,11 @@ static char kENRMSegmentFadeAnimatorKey;
 - (void)emitImagePress:(NSString *)url altText:(NSString *)altText;
 - (void)emitTaskListItemPress:(NSInteger)index checked:(BOOL)checked text:(NSString *)text;
 - (void)emitCopyPress:(NSString *)code language:(NSString *)language;
+- (void)emitCodeBlockPress:(NSString *)code language:(NSString *)language;
 - (void)emitContextMenuItemPress:(NSString *)itemText
                     selectedText:(NSString *)selectedText
                   selectionStart:(NSUInteger)selectionStart
                     selectionEnd:(NSUInteger)selectionEnd;
-- (void)pushBlockContextMenuToSegments;
 @end
 
 @implementation EnrichedMarkdown {
@@ -91,6 +97,7 @@ static char kENRMSegmentFadeAnimatorKey;
   BOOL _isGFM;
   NSString *_cachedMarkdown;
   NSString *_renderedMarkdown;
+  ENRMLatexErrorCoordinator *_latexErrorCoordinator;
   NSMutableArray<RCTUIView *> *_segmentViews;
   NSMutableArray<NSNumber *> *_segmentSignatures;
   ENRMSegmentViewRegistry *_segmentViewRegistry;
@@ -109,7 +116,6 @@ static char kENRMSegmentFadeAnimatorKey;
   BOOL _enableLinkPreview;
   BOOL _enableTaskListItemToggle;
   BOOL _enableImagePress;
-  BOOL _enableBlockContextMenu;
   BOOL _streamingAnimation;
   ENRMTableStreamingMode _tableStreamingMode;
   ENRMCodeBlockStreamingMode _codeBlockStreamingMode;
@@ -124,6 +130,8 @@ static char kENRMSegmentFadeAnimatorKey;
   ENRMSelectionMenuConfig _selectionMenuConfig;
   ENRMAccessibilityLabels *_accessibilityLabels;
   ENRMSelectionMenuLabels _selectionMenuLabels;
+
+  ENRMDynamicBlockProps *_dynamicBlockProps;
 
   ENRMSpoilerOverlay _spoilerOverlay;
 
@@ -166,6 +174,22 @@ static char kENRMSegmentFadeAnimatorKey;
     _isGFM = defaultProps->isGFM;
     _segmentViews = [NSMutableArray array];
     _segmentSignatures = [NSMutableArray array];
+    __weak __typeof(self) weakLatexSelf = self;
+    _latexErrorCoordinator =
+        [[ENRMLatexErrorCoordinator alloc] initWithEmit:^BOOL(NSString *source, NSString *message, BOOL displayMode) {
+          __typeof(self) strongSelf = weakLatexSelf;
+          if (!strongSelf)
+            return NO;
+          auto emitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(strongSelf->_eventEmitter);
+          if (!emitter)
+            return NO;
+          emitter->onLatexError({
+              .source = std::string(source.UTF8String ?: ""),
+              .message = std::string(message.UTF8String ?: ""),
+              .displayMode = displayMode ? true : false,
+          });
+          return YES;
+        }];
     _dirtyFlags = ENRMDirtyNone;
     [self configureSegmentViewRegistry];
 
@@ -178,7 +202,7 @@ static char kENRMSegmentFadeAnimatorKey;
     _enableLinkPreview = YES;
     _enableTaskListItemToggle = YES;
     _enableImagePress = NO;
-    _enableBlockContextMenu = YES;
+    _dynamicBlockProps = [[ENRMDynamicBlockProps alloc] init];
     _streamingAnimation = NO;
     _tableStreamingMode = ENRMTableStreamingModeProgressive;
     _codeBlockStreamingMode = ENRMCodeBlockStreamingModeProgressive;
@@ -319,6 +343,31 @@ static char kENRMSegmentFadeAnimatorKey;
                                 applyBlockquoteNode:segment.blockquoteSegment.blockquoteNode];
                           }]];
 
+#if ENRICHED_MARKDOWN_VIDEO
+  [handlers addObject:[ENRMSegmentViewHandler handlerWithKind:ENRMSegmentKindVideo
+                          matchesView:^BOOL(RCTUIView *view, ENRMRenderedSegment *segment) {
+                            return [view isKindOfClass:[ENRMVideoContainerView class]];
+                          }
+                          createView:^RCTUIView *(ENRMRenderedSegment *segment) {
+                            EnrichedMarkdown *strongSelf = weakSelf;
+                            if (!strongSelf) {
+                              return [[RCTUIView alloc] init];
+                            }
+
+                            ENRMVideoContainerView *view =
+                                [[ENRMVideoContainerView alloc] initWithConfig:strongSelf->_config];
+                            view.dynamicProps = strongSelf->_dynamicBlockProps;
+                            [view applyVideoNode:segment.videoSegment.videoNode];
+                            [strongSelf animateBlockViewIfNeeded:view];
+                            return view;
+                          }
+                          updateView:^(RCTUIView *view, ENRMRenderedSegment *segment) {
+                            ENRMVideoContainerView *videoView = (ENRMVideoContainerView *)view;
+                            [videoView applyVideoNode:segment.videoSegment.videoNode];
+                            [videoView reapplyStyle];
+                          }]];
+#endif
+
   _segmentViewRegistry = [[ENRMSegmentViewRegistry alloc] initWithHandlers:handlers];
 }
 
@@ -327,15 +376,19 @@ static char kENRMSegmentFadeAnimatorKey;
   ENRMBlockquoteContainerView *view = [[ENRMBlockquoteContainerView alloc] initWithConfig:_config];
   view.allowFontScaling = _fontScaleObserver.allowFontScaling;
   view.lineBreakStrategy = _lineBreakStrategy;
-  view.copyLabel = _selectionMenuLabels.copyLabel;
-  view.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
-  view.enableBlockContextMenu = _enableBlockContextMenu;
+  view.dynamicProps = _dynamicBlockProps;
+  view.accessibilityLabels = _accessibilityLabels;
 
   __weak EnrichedMarkdown *weakSelf = self;
   view.onCopyPress = ^(NSString *code, NSString *language) {
     EnrichedMarkdown *strongSelf = weakSelf;
     if (strongSelf)
       [strongSelf emitCopyPress:code language:language];
+  };
+  view.onCodeBlockPress = ^(NSString *code, NSString *language) {
+    EnrichedMarkdown *strongSelf = weakSelf;
+    if (strongSelf)
+      [strongSelf emitCodeBlockPress:code language:language];
   };
   view.onLinkPress = ^(NSString *url) {
     EnrichedMarkdown *strongSelf = weakSelf;
@@ -350,6 +403,32 @@ static char kENRMSegmentFadeAnimatorKey;
 
   [view applyBlockquoteNode:blockquoteSegment.blockquoteNode];
   return view;
+}
+
+/// The box the segments actually live in: the component frame inset by the
+/// `containerStyle` border and padding (`LayoutMetrics::getContentFrame`).
+///
+/// Yoga hands `measureContent` an available size that already excludes those
+/// insets and then adds them back to the frame it commits, so laying the
+/// segments out against `self.bounds` would stack them over the padding and
+/// across the border while the space Yoga reserved for the content stays blank
+/// at the bottom. Unlike `EnrichedMarkdownText`, the segments are attached to
+/// the component view itself rather than to `contentView`, so nothing applies
+/// the insets for us.
+///
+/// Taken from `_layoutMetrics` rather than recomputed off `self.bounds`:
+/// `prepareForRecycle` resets the metrics but leaves the bounds behind, so the
+/// two do not always agree. The box is empty both before the first layout
+/// metrics arrive and when the insets consume the whole component width; neither
+/// may fall back to `self.bounds`, which is the padded border box the segments
+/// must not be drawn across, so an over-constrained box clamps to zero and
+/// callers skip laying out at all.
+- (CGRect)contentBounds
+{
+  CGRect box = RCTCGRectFromRect(_layoutMetrics.getContentFrame());
+  box.size.width = MAX(box.size.width, 0);
+  box.size.height = MAX(box.size.height, 0);
+  return box;
 }
 
 - (CGSize)computeSegmentLayoutForWidth:(CGFloat)width applyFrames:(BOOL)applyFrames
@@ -383,6 +462,10 @@ static char kENRMSegmentFadeAnimatorKey;
   __block CGFloat yOffset = 0.0;
   __block CGFloat maxContentWidth = 0.0;
   const NSUInteger lastIndex = _segmentViews.count - 1;
+  // Frames are stacked in the component's own coordinate space, so the content
+  // origin (containerStyle border + padding) shifts every segment. yOffset stays
+  // content-relative because it doubles as the measured content height.
+  const CGPoint contentOrigin = applyFrames ? [self contentBounds].origin : CGPointZero;
 
   [_segmentViews enumerateObjectsUsingBlock:^(RCTUIView *segment, NSUInteger i, BOOL *stop) {
     const BOOL isLast = (i == lastIndex);
@@ -419,18 +502,25 @@ static char kENRMSegmentFadeAnimatorKey;
       segmentHeight = [(ENRMBlockquoteContainerView *)segment measureHeight:width];
       maxContentWidth = width;
     }
+#if ENRICHED_MARKDOWN_VIDEO
+    else if ([segment isKindOfClass:[ENRMVideoContainerView class]]) {
+      yOffset += _config.videoMarginTop;
+      segmentHeight = [(ENRMVideoContainerView *)segment measureHeight:width];
+      maxContentWidth = width;
+    }
+#endif
 
     if (applyFrames) {
-      CGFloat segmentX = 0;
+      CGFloat segmentX = contentOrigin.x;
       CGFloat segmentWidth = width;
       if (isTable) {
         CGFloat overhang = MAX(_config.tableHorizontalOverflow, 0);
         if (overhang > 0) {
-          segmentX = -overhang;
+          segmentX = contentOrigin.x - overhang;
           segmentWidth = width + overhang * 2;
         }
       }
-      CGRect segmentFrame = CGRectMake(segmentX, yOffset, segmentWidth, segmentHeight);
+      CGRect segmentFrame = CGRectMake(segmentX, contentOrigin.y + yOffset, segmentWidth, segmentHeight);
       segment.frame = segmentFrame;
 #if TARGET_OS_OSX
       if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
@@ -458,6 +548,11 @@ static char kENRMSegmentFadeAnimatorKey;
     } else if ([segment isKindOfClass:[ENRMBlockquoteContainerView class]] && shouldAddBottomMargin) {
       yOffset += _config.blockquoteMarginBottom;
     }
+#if ENRICHED_MARKDOWN_VIDEO
+    else if ([segment isKindOfClass:[ENRMVideoContainerView class]] && shouldAddBottomMargin) {
+      yOffset += _config.videoMarginBottom;
+    }
+#endif
   }];
 
   return CGSizeMake(maxContentWidth, yOffset);
@@ -516,15 +611,21 @@ static char kENRMSegmentFadeAnimatorKey;
   }
 }
 
-/// Yoga-resolved direction inherited from any ancestor `direction` style.
-/// In FirstStrong mode this feeds the neutral-paragraph fallback, so a change
-/// requires segment recreation.
+/// Publishes the committed size to the streaming fast path's mailbox, and picks
+/// up the Yoga-resolved direction inherited from any ancestor `direction` style.
+/// In FirstStrong mode the direction feeds the neutral-paragraph fallback, so a
+/// change requires segment recreation.
+///
+/// The mailbox holds a content size, not the border box: `measureContent`
+/// returns it straight to Yoga, which adds the `containerStyle` insets back on
+/// top of whatever it gets, so storing `frame.size` would double-count them.
 - (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
            oldLayoutMetrics:(const LayoutMetrics &)oldLayoutMetrics
 {
   [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
 
-  _lastCommittedSize.store(CGSizeMake(layoutMetrics.frame.size.width, layoutMetrics.frame.size.height));
+  const auto contentSize = layoutMetrics.getContentFrame().size;
+  _lastCommittedSize.store(CGSizeMake(contentSize.width, contentSize.height));
 
   NSWritingDirection resolved = _resolvedLayoutDirection;
   if (layoutMetrics.layoutDirection == LayoutDirection::RightToLeft) {
@@ -561,62 +662,14 @@ static char kENRMSegmentFadeAnimatorKey;
       ((EnrichedMarkdownInternalText *)segment).accessibilityLabels = _accessibilityLabels;
     } else if ([segment isKindOfClass:[TableContainerView class]]) {
       ((TableContainerView *)segment).accessibilityLabels = _accessibilityLabels;
+    } else if ([segment isKindOfClass:[ENRMBlockquoteContainerView class]]) {
+      ((ENRMBlockquoteContainerView *)segment).accessibilityLabels = _accessibilityLabels;
     }
 #if ENRICHED_MARKDOWN_MATH
     else if ([segment isKindOfClass:[ENRMMathContainerView class]]) {
       ((ENRMMathContainerView *)segment).accessibilityLabels = _accessibilityLabels;
     }
 #endif
-  }
-}
-
-// Table and math views cache the copy labels at creation time, so re-push them
-// on prop updates (e.g. a language change without a remount) to avoid stale
-// labels. Only the copy/copy-as-markdown labels apply to these block menus.
-- (void)pushSelectionMenuLabelsToSegments
-{
-  for (RCTUIView *segment in _segmentViews) {
-    if ([segment isKindOfClass:[TableContainerView class]]) {
-      TableContainerView *tableView = (TableContainerView *)segment;
-      tableView.copyLabel = _selectionMenuLabels.copyLabel;
-      tableView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
-    }
-#if ENRICHED_MARKDOWN_MATH
-    else if ([segment isKindOfClass:[ENRMMathContainerView class]]) {
-      ENRMMathContainerView *mathView = (ENRMMathContainerView *)segment;
-      mathView.copyLabel = _selectionMenuLabels.copyLabel;
-      mathView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
-    }
-#endif
-    else if ([segment isKindOfClass:[ENRMCodeBlockContainerView class]]) {
-      ENRMCodeBlockContainerView *codeBlockView = (ENRMCodeBlockContainerView *)segment;
-      codeBlockView.copyLabel = _selectionMenuLabels.copyLabel;
-      codeBlockView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
-    } else if ([segment isKindOfClass:[ENRMBlockquoteContainerView class]]) {
-      ENRMBlockquoteContainerView *blockquoteView = (ENRMBlockquoteContainerView *)segment;
-      blockquoteView.copyLabel = _selectionMenuLabels.copyLabel;
-      blockquoteView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
-      [blockquoteView pushCopyLabelsToChildren];
-    }
-  }
-}
-
-- (void)pushBlockContextMenuToSegments
-{
-  for (RCTUIView *segment in _segmentViews) {
-    if ([segment isKindOfClass:[TableContainerView class]]) {
-      ((TableContainerView *)segment).enableBlockContextMenu = _enableBlockContextMenu;
-    }
-#if ENRICHED_MARKDOWN_MATH
-    else if ([segment isKindOfClass:[ENRMMathContainerView class]]) {
-      ((ENRMMathContainerView *)segment).enableBlockContextMenu = _enableBlockContextMenu;
-    }
-#endif
-    else if ([segment isKindOfClass:[ENRMCodeBlockContainerView class]]) {
-      ((ENRMCodeBlockContainerView *)segment).enableBlockContextMenu = _enableBlockContextMenu;
-    } else if ([segment isKindOfClass:[ENRMBlockquoteContainerView class]]) {
-      ((ENRMBlockquoteContainerView *)segment).enableBlockContextMenu = _enableBlockContextMenu;
-    }
   }
 }
 
@@ -635,10 +688,11 @@ static char kENRMSegmentFadeAnimatorKey;
     MeasurementCache::shared().removeMatchingMarkdown(std::string(_renderedMarkdown.UTF8String));
   }
 
-  if (self.bounds.size.width > 0) {
+  CGRect contentBounds = [self contentBounds];
+  if (contentBounds.size.width > 0) {
     [self setNeedsLayout];
-    CGSize measured = [self measureSize:self.bounds.size.width];
-    if (needsHeightUpdate(measured, self.bounds)) {
+    CGSize measured = [self measureSize:contentBounds.size.width];
+    if (needsHeightUpdate(measured, contentBounds)) {
       [self requestHeightUpdate];
     }
   }
@@ -815,16 +869,17 @@ static char kENRMSegmentFadeAnimatorKey;
     }
   }];
 
-  if (self.bounds.size.width > 0) {
+  CGRect contentBounds = [self contentBounds];
+  if (contentBounds.size.width > 0) {
     [self setNeedsLayout];
 
     if (forceHeightUpdate || segmentTopologyChanged) {
-      [self computeSegmentLayoutForWidth:self.bounds.size.width applyFrames:YES];
+      [self computeSegmentLayoutForWidth:contentBounds.size.width applyFrames:YES];
       [self layoutIfNeeded];
       [self requestHeightUpdate];
     } else {
-      CGSize measured = [self measureSize:self.bounds.size.width];
-      if (needsHeightUpdate(measured, self.bounds)) {
+      CGSize measured = [self measureSize:contentBounds.size.width];
+      if (needsHeightUpdate(measured, contentBounds)) {
         [self requestHeightUpdate];
       }
     }
@@ -839,6 +894,7 @@ static char kENRMSegmentFadeAnimatorKey;
   view.accessibilityInfo = segment.accessibilityInfo;
   view.accessibilityLabels = _accessibilityLabels;
   view.textView.selectable = _selectable;
+  [_latexErrorCoordinator wireReporters:segment.context.mathReporters];
   [view applyAttributedText:segment.attributedText context:segment.context];
 
   const auto &selectionProps = *std::static_pointer_cast<EnrichedMarkdownProps const>(self->_props);
@@ -872,7 +928,7 @@ static char kENRMSegmentFadeAnimatorKey;
                                   selectionEnd:selectionEnd];
         });
     return buildEditMenuForSelection(textView.textStorage, textView.selectedRange, segmentMarkdown, strongSelf->_config,
-                                     @[ baseMenu ], customItems, strongSelf->_selectionMenuConfig);
+                                     @[ baseMenu ], customItems, strongSelf -> _selectionMenuConfig);
   }];
 #endif
 
@@ -886,12 +942,10 @@ static char kENRMSegmentFadeAnimatorKey;
   tableView.allowFontScaling = _fontScaleObserver.allowFontScaling;
   tableView.maxFontSizeMultiplier = _maxFontSizeMultiplier;
   tableView.enableLinkPreview = _enableLinkPreview;
-  tableView.enableBlockContextMenu = _enableBlockContextMenu;
+  tableView.dynamicProps = _dynamicBlockProps;
   tableView.writingDirectionMode = _writingDirectionMode;
   tableView.resolvedLayoutDirection = _resolvedLayoutDirection;
   tableView.accessibilityLabels = _accessibilityLabels;
-  tableView.copyLabel = _selectionMenuLabels.copyLabel;
-  tableView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
 
   __weak EnrichedMarkdown *weakSelf = self;
 
@@ -928,10 +982,12 @@ static char kENRMSegmentFadeAnimatorKey;
 - (ENRMMathContainerView *)createMathViewForSegment:(ENRMMathSegment *)mathSegment
 {
   ENRMMathContainerView *mathView = [[ENRMMathContainerView alloc] initWithConfig:_config];
-  mathView.enableBlockContextMenu = _enableBlockContextMenu;
+  mathView.dynamicProps = _dynamicBlockProps;
   mathView.accessibilityLabels = _accessibilityLabels;
-  mathView.copyLabel = _selectionMenuLabels.copyLabel;
-  mathView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
+  ENRMLatexErrorCoordinator *coordinator = _latexErrorCoordinator;
+  mathView.onLatexError = ^(NSString *source, NSString *message, BOOL displayMode) {
+    [coordinator reportSource:source message:message displayMode:displayMode];
+  };
   [mathView applyLatex:mathSegment.latex];
   return mathView;
 }
@@ -940,15 +996,18 @@ static char kENRMSegmentFadeAnimatorKey;
 - (ENRMCodeBlockContainerView *)createCodeBlockViewForSegment:(ENRMCodeBlockSegment *)codeBlockSegment
 {
   ENRMCodeBlockContainerView *codeBlockView = [[ENRMCodeBlockContainerView alloc] initWithConfig:_config];
-  codeBlockView.enableBlockContextMenu = _enableBlockContextMenu;
-  codeBlockView.copyLabel = _selectionMenuLabels.copyLabel;
-  codeBlockView.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
+  codeBlockView.dynamicProps = _dynamicBlockProps;
 
   __weak EnrichedMarkdown *weakSelf = self;
   codeBlockView.onCopyPress = ^(NSString *code, NSString *language) {
     EnrichedMarkdown *strongSelf = weakSelf;
     if (strongSelf)
       [strongSelf emitCopyPress:code language:language];
+  };
+  codeBlockView.onCodeBlockPress = ^(NSString *code, NSString *language) {
+    EnrichedMarkdown *strongSelf = weakSelf;
+    if (strongSelf)
+      [strongSelf emitCodeBlockPress:code language:language];
   };
 
   codeBlockView.pending = codeBlockSegment == _pendingCodeBlockSegment;
@@ -994,7 +1053,10 @@ static char kENRMSegmentFadeAnimatorKey;
 - (void)layoutSubviews
 {
   [super layoutSubviews];
-  [self computeSegmentLayoutForWidth:self.bounds.size.width applyFrames:YES];
+  CGFloat contentWidth = [self contentBounds].size.width;
+  if (contentWidth > 0) {
+    [self computeSegmentLayoutForWidth:contentWidth applyFrames:YES];
+  }
 }
 
 - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &)oldProps
@@ -1013,7 +1075,6 @@ static char kENRMSegmentFadeAnimatorKey;
   }
 
   if (applyMarkdownStyleToConfig(_config, newViewProps.markdownStyle, oldViewProps.markdownStyle)) {
-    [ENRMImageAttachment clearAttachmentRegistry];
     _dirtyFlags |= ENRMDirtyForceHeight | ENRMDirtyRender;
     if (!markdownChanged) {
       _dirtyFlags |= ENRMDirtyRecreateSegments;
@@ -1081,10 +1142,10 @@ static char kENRMSegmentFadeAnimatorKey;
   _enableTaskListItemToggle = newViewProps.enableTaskListItemToggle;
   _enableImagePress = newViewProps.enableImagePress;
 
-  if (_enableBlockContextMenu != newViewProps.enableBlockContextMenu) {
-    _enableBlockContextMenu = newViewProps.enableBlockContextMenu;
-    [self pushBlockContextMenuToSegments];
-  }
+  // Block gates: mutate the shared box in place. Every existing and future block
+  // view reads it live at use-time, so no push into segments is needed.
+  _dynamicBlockProps.enableBlockContextMenu = newViewProps.enableBlockContextMenu;
+  _dynamicBlockProps.enableCodeBlockPress = newViewProps.enableCodeBlockPress;
 
   if (newViewProps.streamingAnimation != oldViewProps.streamingAnimation) {
     _streamingAnimation = newViewProps.streamingAnimation;
@@ -1126,7 +1187,10 @@ static char kENRMSegmentFadeAnimatorKey;
   _selectionMenuConfig =
       ENRMBuildSelectionMenuConfig(_selectionMenuLabels, newViewProps.selectionMenuConfig.copyAsMarkdown,
                                    newViewProps.selectionMenuConfig.copyImageUrl);
-  [self pushSelectionMenuLabelsToSegments];
+  // Block menu labels live in the shared box; block views read them live at
+  // menu-open. (_selectionMenuLabels also feeds the text selection menu above.)
+  _dynamicBlockProps.copyLabel = _selectionMenuLabels.copyLabel;
+  _dynamicBlockProps.copyAsMarkdownLabel = _selectionMenuLabels.copyAsMarkdownLabel;
 
   if (ENRMAccessibilityLabelsChanged(oldViewProps.accessibilityLabels, newViewProps.accessibilityLabels)) {
     _accessibilityLabels = [[ENRMAccessibilityLabels alloc] init];
@@ -1210,9 +1274,12 @@ static char kENRMSegmentFadeAnimatorKey;
       }
     }
 
-    CGSize measured = [self measureSize:self.bounds.size.width];
-    if (needsHeightUpdate(measured, self.bounds)) {
-      [self requestHeightUpdate];
+    CGRect contentBounds = [self contentBounds];
+    if (contentBounds.size.width > 0) {
+      CGSize measured = [self measureSize:contentBounds.size.width];
+      if (needsHeightUpdate(measured, contentBounds)) {
+        [self requestHeightUpdate];
+      }
     }
   }
 }
@@ -1311,7 +1378,7 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
     BOOL isInsideView = CGRectContainsPoint(textSegment.textView.bounds, segmentPoint);
 #endif
     if (isInsideView) {
-      if (isPointOnInteractiveElement(textSegment.textView, segmentPoint, _enableImagePress)) {
+      if (isPointOnInteractiveElement(textSegment.textView, segmentPoint, _enableImagePress, NO)) {
         return nil;
       }
       break;
@@ -1373,6 +1440,14 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
         {.code = std::string(code.UTF8String ?: ""), .language = std::string(language.UTF8String ?: "")});
 }
 
+- (void)emitCodeBlockPress:(NSString *)code language:(NSString *)language
+{
+  auto emitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
+  if (emitter)
+    emitter->onCodeBlockPress(
+        {.code = std::string(code.UTF8String ?: ""), .language = std::string(language.UTF8String ?: "")});
+}
+
 - (void)emitContextMenuItemPress:(NSString *)itemText
                     selectedText:(NSString *)selectedText
                   selectionStart:(NSUInteger)selectionStart
@@ -1386,6 +1461,12 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
         .selectionStart = (int)selectionStart,
         .selectionEnd = (int)selectionEnd,
     });
+}
+
+- (void)updateEventEmitter:(const facebook::react::EventEmitter::Shared &)eventEmitter
+{
+  [super updateEventEmitter:eventEmitter];
+  [_latexErrorCoordinator flushPending];
 }
 
 - (void)textTapped:(ENRMTapRecognizer *)recognizer

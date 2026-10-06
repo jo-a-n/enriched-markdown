@@ -6,8 +6,10 @@ import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
 import android.graphics.Color
 import android.os.Build
+import android.os.SystemClock
 import android.text.Editable
 import android.text.InputType
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -36,6 +38,7 @@ import com.swmansion.enriched.markdown.input.editing.EditSession
 import com.swmansion.enriched.markdown.input.editing.InputConnectionWrapper
 import com.swmansion.enriched.markdown.input.editing.LinkCoordinator
 import com.swmansion.enriched.markdown.input.editing.MarkdownEditableFactory
+import com.swmansion.enriched.markdown.input.editing.MarkdownShortcutsConfig
 import com.swmansion.enriched.markdown.input.editing.MarkdownTextWatcher
 import com.swmansion.enriched.markdown.input.editing.MentionCoordinator
 import com.swmansion.enriched.markdown.input.editing.MentionEvent
@@ -61,6 +64,8 @@ class EnrichedMarkdownTextInputView(
   context: Context,
 ) : AppCompatEditText(context) {
   private var isComponentReady = false
+  private var lastEmittedSelectionStart = -1
+  private var lastEmittedSelectionEnd = -1
 
   val formattingStore = FormattingStore()
   val blockStore = BlockStore()
@@ -109,6 +114,9 @@ class EnrichedMarkdownTextInputView(
       override fun runAsATransaction(block: () -> Unit) = this@EnrichedMarkdownTextInputView.runAsATransaction(block)
 
       override fun setViewSelection(position: Int) = setSelection(position)
+
+      override val markdownShortcuts: MarkdownShortcutsConfig
+        get() = this@EnrichedMarkdownTextInputView.markdownShortcuts
     }
 
   val editPipeline =
@@ -125,9 +133,13 @@ class EnrichedMarkdownTextInputView(
   private var inputMethodManager: InputMethodManager? = null
   private var detectScrollMovement = false
   private var isLinkTapCandidate = false
+  private var linkPressConsumedAt = 0L
   private var linkTapDownX = 0f
   private var linkTapDownY = 0f
   var scrollEnabled: Boolean = true
+
+  /** Typed `# `, `- `, `1. ` become blocks (opt-in per family from JS). */
+  var markdownShortcuts: MarkdownShortcutsConfig = MarkdownShortcutsConfig()
 
   private val clipboardCoordinator = ClipboardCoordinator(formattingStore, blockStore, detectorPipeline, formatter)
 
@@ -280,6 +292,7 @@ class EnrichedMarkdownTextInputView(
         detectScrollMovement = true
         parent?.requestDisallowInterceptTouchEvent(true)
         isLinkTapCandidate = isOnLinkPressSet && !isFocused
+        linkPressConsumedAt = 0L
         linkTapDownX = ev.x
         linkTapDownY = ev.y
       }
@@ -314,6 +327,7 @@ class EnrichedMarkdownTextInputView(
             cancel.action = MotionEvent.ACTION_CANCEL
             super.onTouchEvent(cancel)
             cancel.recycle()
+            linkPressConsumedAt = SystemClock.uptimeMillis()
             eventEmitter.emitLinkPress(url)
             return true
           }
@@ -336,6 +350,28 @@ class EnrichedMarkdownTextInputView(
   }
 
   override fun performClick(): Boolean = super.performClick()
+
+  // Framework bug (issue #728): inside Editor.performLongClick, the guarded branch calls
+  // Selection.setSelection, whose SpanWatcher callback runs our onSelectionChanged override
+  // synchronously; that can re-run prepareCursorControllers and flip mInsertionControllerEnabled
+  // to false before the immediately following getInsertionController().show(), which then
+  // dereferences null. Absorb only that specific NPE (thrown from Editor.performLongClick) and
+  // rethrow anything else so unrelated regressions in our own callbacks aren't masked. We log it
+  // rather than swallowing silently (RN's ReactSoftExceptionLogger is internal to RN, so we use a
+  // plain warning under our own tag), and return true so the long press counts as handled (else
+  // View.CheckForLongPress leaves mHasPerformedLongPress unset and a spurious click fires on
+  // ACTION_UP); the long press just skips the insertion UI on that frame instead of crashing.
+  override fun performLongClick(): Boolean =
+    try {
+      super.performLongClick()
+    } catch (e: NullPointerException) {
+      val top = e.stackTrace.firstOrNull()
+      if (top == null || !top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick") {
+        throw e
+      }
+      Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
+      true
+    }
 
   // In auto-grow mode (scrollEnabled=false) TextView's internal bringPointIntoView
   // scrolls content before Fabric has resized the view, causing a visible flicker.
@@ -404,6 +440,7 @@ class EnrichedMarkdownTextInputView(
     } finally {
       editSession.exit()
     }
+    emitSelectionIfChanged()
   }
 
   override fun onSelectionChanged(
@@ -433,10 +470,31 @@ class EnrichedMarkdownTextInputView(
       syncEmptyListAnchor()
     }
 
-    eventEmitter.emitSelection(selStart, selEnd)
+    emitSelectionIfChanged()
     dispatchMentionUpdate()
     eventEmitter.emitState()
     eventEmitter.emitCaretRectChangeIfNeeded()
+  }
+
+  /**
+   * Sends the caret range to JS when it differs from the last range JS received.
+   *
+   * [onSelectionChanged] returns immediately while an edit phase is active, so
+   * a caret move from setValue, a programmatic insert, or anchor management is
+   * not reported there. Those callers invoke this once the edit phase has ended.
+   *
+   * This function then rereads the latest range at that point before emitting
+   * the selection.
+   */
+  private fun emitSelectionIfChanged() {
+    if (!isComponentReady) return
+    val start = selectionStart
+    val end = selectionEnd
+    if (start == lastEmittedSelectionStart && end == lastEmittedSelectionEnd) return
+    if (eventEmitter.emitSelection(start, end)) {
+      lastEmittedSelectionStart = start
+      lastEmittedSelectionEnd = end
+    }
   }
 
   /**
@@ -495,6 +553,7 @@ class EnrichedMarkdownTextInputView(
     } finally {
       editSession.exit()
     }
+    emitSelectionIfChanged()
   }
 
   fun applyFormatting() {
@@ -988,6 +1047,7 @@ class EnrichedMarkdownTextInputView(
     } finally {
       editSession.exit()
     }
+    emitSelectionIfChanged()
   }
 
   override fun setBackgroundColor(color: Int) {
@@ -1053,10 +1113,30 @@ class EnrichedMarkdownTextInputView(
     AutoCapitalizeUtils.apply(this, flagName)
   }
 
-  fun requestFocusProgrammatically() {
-    requestFocus()
-    inputMethodManager?.showSoftInput(this, 0)
-    setSelection(selectionStart.coerceAtLeast(0))
+  /**
+   * Programmatic focus for ref.focus() and for the focus command that the JS
+   * pressability onPress sends on finger-up (including after a long-press word
+   * select).
+   *
+   * Matches ReactEditText.requestFocusProgrammatically: request focus and show
+   * the keyboard without touching the selection, so a long-press word selection
+   * isn't collapsed:
+   * https://github.com/react/react-native/blob/v0.86.2/packages/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.kt#L396-L402
+   *
+   * A tap consumed as an unfocused link press is the one case that must not
+   * focus: pressability sends this command for that same finger-up, after the
+   * UP was already swallowed. Suppressing for a short window after the press
+   * drops that one command without stranding later programmatic focus calls.
+   */
+  fun requestFocusProgrammatically(): Boolean {
+    if (SystemClock.uptimeMillis() - linkPressConsumedAt < LINK_PRESS_FOCUS_SUPPRESS_MS) {
+      return isFocused
+    }
+    val focused = super.requestFocus(FOCUS_DOWN, null)
+    if (isInTouchMode && showSoftInputOnFocus) {
+      inputMethodManager?.showSoftInput(this, 0)
+    }
+    return focused
   }
 
   private fun showAutoFocusKeyboardIfPending() {
@@ -1113,5 +1193,17 @@ class EnrichedMarkdownTextInputView(
         is MentionEvent.End -> eventEmitter.emitEndMention(event.indicator)
       }
     }
+  }
+
+  companion object {
+    private val TAG: String = EnrichedMarkdownTextInputView::class.java.simpleName
+
+    /**
+     * How long a consumed link press keeps suppressing the focus command. Long
+     * enough to cover the JS round trip that pressability's own onPress makes
+     * for the same tap, short enough that a later programmatic focus still
+     * lands.
+     */
+    private const val LINK_PRESS_FOCUS_SUPPRESS_MS = 500L
   }
 }

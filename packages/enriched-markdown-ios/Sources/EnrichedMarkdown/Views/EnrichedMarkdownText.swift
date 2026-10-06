@@ -3,39 +3,61 @@ import UIKit
 
 public struct EnrichedMarkdownText: View {
     private let markdown: String
-    private let flags: Md4cFlags
+    private let options: MarkdownParsingOptions
 
     @Environment(\.markdownThemeLayers) private var themeLayers
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.openURL) private var openURL
     @Environment(\.markdownLinkPressHandler) private var onLinkPress
     @Environment(\.markdownLinkLongPressHandler) private var onLinkLongPress
     @Environment(\.markdownSelectionMenu) private var selectionMenuConfig
     @Environment(\.markdownSelectable) private var isSelectionEnabled
     @Environment(\.markdownSelectionColor) private var selectionColor
     @Environment(\.markdownImageRequestHeaders) private var imageRequestHeaders
-    @Environment(\.markdownTaskListItemPressHandler) private var onTaskListItemPress
+    @Environment(\.markdownRenderPlugins) private var renderPlugins
+    @Environment(\.markdownTaskListItemToggleHandler) private var onTaskListItemToggle
     @Environment(\.markdownTaskListItemToggleEnabled) private var isTaskListToggleEnabled
+    @Environment(\.markdownSpoilerOverlay) private var spoilerOverlay
+    @Environment(\.markdownAccessibilityLabels) private var accessibilityLabels
+    @Environment(\.markdownWritingDirection) private var writingDirection
+    // The fallback for paragraphs with no strong directional character.
+    @Environment(\.layoutDirection) private var layoutDirection
     @StateObject private var renderStore = MarkdownRenderStore()
 
-    public init(_ markdown: String, flags: Md4cFlags = .commonMark) {
+    public init(_ markdown: String, options: MarkdownParsingOptions = .commonMark) {
         self.markdown = markdown
-        self.flags = flags
+        self.options = options
     }
 
-    private var styleConfig: MarkdownStyleConfig {
+    private var styleConfig: MarkdownStyleConfiguration {
         let traitCollection = ThemeResolver.traitCollection(
             colorScheme: colorScheme,
             dynamicTypeSize: dynamicTypeSize
         )
-        return MarkdownStyleConfig.resolve(layers: themeLayers, traitCollection: traitCollection)
+        // Plugin defaults go above `MarkdownTheme.default` (the environment's
+        // first layer) and below the app's themes.
+        var layers = themeLayers
+        layers.insert(contentsOf: renderPlugins.compactMap(\.defaultTheme), at: min(1, layers.count))
+        return MarkdownStyleConfiguration.resolve(layers: layers, traitCollection: traitCollection)
     }
 
     public var body: some View {
-        MarkdownTextViewRepresentable(
+        // Resolved once: `styleConfig` rebuilds the whole config on each read.
+        let config = styleConfig
+        let inputs = MarkdownRenderInputs(
+            markdown: markdown,
+            config: config,
+            options: options,
+            imageRequestHeaders: imageRequestHeaders,
+            writingDirection: writingDirection,
+            layoutDirection: layoutDirection
+        )
+        return MarkdownTextViewRepresentable(
             attributedText: renderStore.attributedText,
             source: renderStore.source,
-            styleConfig: styleConfig,
+            styleConfig: config,
+            openURL: { openURL($0) },
             onLinkPress: onLinkPress,
             onLinkLongPress: onLinkLongPress,
             selectionMenuConfig: selectionMenuConfig,
@@ -43,55 +65,25 @@ public struct EnrichedMarkdownText: View {
             selectionColor: selectionColor,
             onTaskListItemTap: isTaskListToggleEnabled ? { hit in
                 let checked = !hit.checked
-                renderStore.applyTaskListToggle(index: hit.index, checked: checked, config: styleConfig)
-                onTaskListItemPress?(
-                    TaskListItemPressEvent(index: hit.index, checked: checked, text: hit.itemText)
+                renderStore.applyTaskListToggle(index: hit.index, checked: checked, config: config)
+                onTaskListItemToggle?(
+                    TaskListItemToggle(index: hit.index, isChecked: checked, text: hit.itemText)
                 )
-            } : nil
+            } : nil,
+            spoilerOverlay: spoilerOverlay,
+            onSpoilerTap: { range in
+                renderStore.revealSpoiler(in: range)
+            },
+            accessibilityLabels: accessibilityLabels
         )
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
-            renderStore.schedule(
-                markdown: markdown,
-                config: styleConfig,
-                flags: flags,
-                imageRequestHeaders: imageRequestHeaders
-            )
+            renderStore.schedule(inputs, plugins: renderPlugins)
         }
-        // The onChange closures run against the previous view value, so the
-        // changed value must come from the closure parameter — reading the
-        // view property would render one update behind.
-        .onChange(of: markdown) { newValue in
-            renderStore.schedule(
-                markdown: newValue,
-                config: styleConfig,
-                flags: flags,
-                imageRequestHeaders: imageRequestHeaders
-            )
-        }
-        .onChange(of: styleConfig) { newValue in
-            renderStore.schedule(
-                markdown: markdown,
-                config: newValue,
-                flags: flags,
-                imageRequestHeaders: imageRequestHeaders
-            )
-        }
-        .onChange(of: flags) { newValue in
-            renderStore.schedule(
-                markdown: markdown,
-                config: styleConfig,
-                flags: newValue,
-                imageRequestHeaders: imageRequestHeaders
-            )
-        }
-        .onChange(of: imageRequestHeaders) { newValue in
-            renderStore.schedule(
-                markdown: markdown,
-                config: styleConfig,
-                flags: flags,
-                imageRequestHeaders: newValue
-            )
+        // Runs against the previous view value, so the render takes the
+        // closure's inputs; the view's would be one update behind.
+        .onChange(of: inputs) { newValue in
+            renderStore.schedule(newValue, plugins: renderPlugins)
         }
         .onDisappear {
             renderStore.invalidate()
@@ -151,8 +143,7 @@ Final paragraph after a thematic break.
                 .foregroundStyle(.teal)
                 .underline(true)
             Blockquote()
-                .borderColor(.orange)
-                .borderWidth(4)
+                .border(.orange, width: 4)
         }
     )
 }

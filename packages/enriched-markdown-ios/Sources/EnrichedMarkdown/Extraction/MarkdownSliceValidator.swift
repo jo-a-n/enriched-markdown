@@ -1,21 +1,22 @@
 import UIKit
 
 /// Verifies a candidate source slice against the selection it should
-/// represent: re-parsed with the render flags, the slice must carry exactly
-/// the selection's visible text (whitespace-insensitive) and the same
-/// table/image/thematic-break structure. This is what turns every mapping
-/// or expansion defect in the slicer into a fallback instead of wrong
-/// clipboard content. The structural counts matter because textless
-/// elements (a duplicated `---` from a mis-anchor) would otherwise pass.
+/// represent: re-parsed with the render options, the slice must carry exactly
+/// the selection's visible text (whitespace-insensitive; plugin attachments
+/// stand in for their literal text) and the same table/image/thematic-break
+/// structure. This is what turns every mapping or expansion defect in the
+/// slicer into a fallback instead of wrong clipboard content. The structural
+/// counts matter because textless elements (a duplicated `---` from a
+/// mis-anchor) would otherwise pass.
 enum MarkdownSliceValidator {
     static func isFaithful(
         _ slice: String,
         toSelection selection: NSRange,
         in attributedText: NSAttributedString,
-        flags: Md4cFlags
+        options: MarkdownParsingOptions
     ) -> Bool {
         var parsed = ContentSummary()
-        summarize(Parser.shared.parseMarkdown(slice, flags: flags), into: &parsed)
+        summarize(Parser.shared.parseMarkdown(slice, options: options), into: &parsed)
         var selected = ContentSummary()
         summarizeSelection(selection, in: attributedText, into: &selected)
         return canonical(parsed.text) == canonical(selected.text)
@@ -68,6 +69,8 @@ private extension MarkdownSliceValidator {
                 summary.images += 1
             case is ThematicBreakAttachment:
                 summary.breaks += 1
+            case let plugin as any MarkdownPluginAttachment:
+                summary.text += plugin.literalText
             default:
                 summary.text += string.substring(with: runRange)
             }

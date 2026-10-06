@@ -1,4 +1,5 @@
 #pragma once
+#import "ENRMDynamicBlockProps.h"
 #import "ENRMUIKit.h"
 #import "StyleConfig.h"
 
@@ -7,6 +8,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 typedef void (^ENRMCodeBlockCopyBlock)(NSString *code, NSString *language);
+typedef void (^ENRMCodeBlockPressBlock)(NSString *code, NSString *language);
 
 @interface ENRMCodeBlockContainerView : RCTUIView
 
@@ -25,17 +27,19 @@ typedef void (^ENRMCodeBlockCopyBlock)(NSString *code, NSString *language);
 // True until the closing fence arrives: highlighting is deferred and copying is
 // disabled, while the header stays visible.
 @property (nonatomic, assign) BOOL pending;
-@property (nonatomic, assign) BOOL enableBlockContextMenu;
 
-// Renamed getters avoid the Cocoa `copy` method family (which signals +1
-// retained returns). Property names are unchanged so call sites stay the same.
-@property (nonatomic, copy, nullable, getter=menuCopyLabel) NSString *copyLabel;
-@property (nonatomic, copy, nullable, getter=menuCopyAsMarkdownLabel) NSString *copyAsMarkdownLabel;
+// Shared, runtime-mutable block props (context-menu gate, tap gate, copy labels)
+// read live at use-time. Set to the root's shared instance at creation so a code
+// block added after a toggle is born current. See ENRMDynamicBlockProps.
+@property (nonatomic, strong) ENRMDynamicBlockProps *dynamicProps;
 
 // Fired when the code is copied (header button, context-menu Copy, or the
 // VoiceOver copy action); set by the host to bridge up to the JS onCopyPress
 // event. Not fired for "Copy as Markdown".
 @property (nonatomic, copy, nullable) ENRMCodeBlockCopyBlock onCopyPress;
+
+// Bridges a whole-block tap (not the copy button) up to the JS onCodeBlockPress event.
+@property (nonatomic, copy, nullable) ENRMCodeBlockPressBlock onCodeBlockPress;
 
 @end
 
