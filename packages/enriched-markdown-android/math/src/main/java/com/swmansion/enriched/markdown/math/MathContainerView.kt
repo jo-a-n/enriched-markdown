@@ -12,13 +12,11 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import androidx.core.view.ViewCompat
-import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.segments.BlockSegmentView
 import com.swmansion.enriched.markdown.styles.StyleConfig
 import com.swmansion.enriched.markdown.styles.TextAlignment
 import com.swmansion.enriched.markdown.utils.text.view.SelectionMenuConfig
 import com.swmansion.enriched.markdown.views.ContextMenuPopup
-import io.ratex.RaTeXFontLoader
 import io.ratex.RaTeXRenderer
 import kotlin.math.ceil
 
@@ -33,7 +31,6 @@ class MathContainerView(
   context: Context,
   styleConfig: StyleConfig,
   var selectionMenuConfig: SelectionMenuConfig = SelectionMenuConfig(),
-  private val onPluginEvent: PluginEventSink? = null,
 ) : FrameLayout(context),
   BlockSegmentView {
   private val mathStyle: MathStyle = styleConfig.mathStyle(context)
@@ -95,30 +92,24 @@ class MathContainerView(
 
   internal fun applyPayload(payload: MathSegmentPayload) {
     latex = payload.latex
-    var failure = payload.failure
-    val renderer =
-      payload.displayList?.let { displayList ->
-        runRaTeX(onFailure = { failure = it }) {
-          RaTeXRenderer(displayList, mathStyle.fontSize) { RaTeXFontLoader.getTypeface(it) }
-        }
-      }
+    val renderer = payload.renderer
     if (renderer != null) {
       mathView.renderer = renderer
       mathView.fallbackText = null
     } else {
-      showSource(failure)
+      showSource()
     }
     mathView.requestLayout()
     mathView.invalidate()
     updateAccessibilityLabel()
   }
 
-  private fun showSource(error: Throwable?) {
+  /** The engine rejected [latex], which the segment already reported when it was rendered. */
+  private fun showSource() {
     mathView.renderer = null
     mathView.fallbackText = "\$\$" + latex + "\$\$"
     mathView.fallbackColor = mathStyle.color
     mathView.fallbackFontSize = mathStyle.fontSize
-    onPluginEvent?.emit(LatexErrorEvent(latex, error?.message, displayMode = true))
   }
 
   private fun updateAccessibilityLabel() {

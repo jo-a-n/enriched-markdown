@@ -111,7 +111,7 @@ object MarkdownSegmentRenderer {
         is MarkdownSegment.Custom -> {
           // A null payload is the plugin declining this node - half-arrived content, say. Its
           // source still has to reach the screen, so it falls back to core text rendering.
-          renderCustom(segment.pluginId, segment.plugin, segment.node, style, context)
+          renderCustom(segment.pluginId, segment.plugin, segment.node, style, context, onPluginEvent)
             ?: renderAsText(listOf(segment.node))
         }
       }
@@ -124,8 +124,9 @@ object MarkdownSegmentRenderer {
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
+    onPluginEvent: PluginEventSink?,
   ): RenderedSegment.Custom<P>? {
-    val payload = plugin.renderPayload(node, style, context) ?: return null
+    val payload = plugin.renderPayload(node, style, context, onPluginEvent) ?: return null
     return RenderedSegment.Custom(
       pluginId = pluginId,
       plugin = plugin,

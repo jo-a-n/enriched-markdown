@@ -13,6 +13,7 @@ import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.MarkdownPlugin
+import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.plugin.PluginInlineSpan
 import com.swmansion.enriched.markdown.plugin.PluginRegistry
 import com.swmansion.enriched.markdown.plugin.PluginSegmentPayload
@@ -83,11 +84,17 @@ class FakeBlockSegment(
   var updatedViews = 0
     private set
 
+  /** The sink the most recent [renderPayload] was handed. */
+  var lastPayloadSink: PluginEventSink? = null
+    private set
+
   override fun renderPayload(
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
+    onPluginEvent: PluginEventSink?,
   ): FakePayload? {
+    lastPayloadSink = onPluginEvent
     if (node.content == FakePlugin.DECLINE) return null
     return FakePayload("$marker:${node.content}")
   }

@@ -14,7 +14,6 @@ import com.swmansion.enriched.markdown.plugin.InternalPluginApi
 import com.swmansion.enriched.markdown.plugin.PluginEvent
 import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,12 +60,18 @@ class RaTeXUnavailableTest {
   }
 
   @Test
-  fun blockPayloadRecordsTheFailureAndTheViewDrawsItsSourceInsteadOfThrowing() {
+  fun blockPayloadReportsTheFailureAndTheViewDrawsItsSourceInsteadOfThrowing() {
     val sink = RecordingSink()
-    val payload = MathBlockSegment().renderPayload(latexMathDisplay("E = mc^2"), defaultStyle, context)
-    assertNotNull(payload!!.failure)
+    val payload = MathBlockSegment().renderPayload(latexMathDisplay("E = mc^2"), defaultStyle, context, sink)
 
-    val view = MathContainerView(context, defaultStyle, onPluginEvent = sink)
+    // Reported on the render thread, where the payload is built for every render, so a reused
+    // view does not have to report it again.
+    assertNull(payload!!.renderer)
+    val event = sink.events.single() as LatexErrorEvent
+    assertEquals("E = mc^2", event.source)
+    assertEquals(true, event.displayMode)
+
+    val view = MathContainerView(context, defaultStyle)
     view.applyPayload(payload)
     view.measure(
       View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY),
@@ -76,8 +81,6 @@ class RaTeXUnavailableTest {
     view.draw(Canvas(Bitmap.createBitmap(720, 240, Bitmap.Config.ARGB_8888)))
 
     assertTrue("a fallback equation still occupies its block", view.measuredHeight > 0)
-    val event = sink.events.single() as LatexErrorEvent
-    assertEquals("E = mc^2", event.source)
-    assertEquals(true, event.displayMode)
+    assertEquals("the view reports nothing more", 1, sink.events.size)
   }
 }

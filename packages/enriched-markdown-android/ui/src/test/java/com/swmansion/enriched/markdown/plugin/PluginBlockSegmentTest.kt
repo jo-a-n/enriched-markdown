@@ -84,6 +84,25 @@ class PluginBlockSegmentTest {
     assertEquals("fake:x^2", custom.payload.signatureSource)
   }
 
+  /**
+   * The payload is built on every render, while a view whose segment is unchanged is reused without
+   * an update, so this is where a plugin's report is repeated for each new document.
+   */
+  @Test
+  fun renderPayloadIsHandedTheRendersEventSink() {
+    val sink = PluginEventSink { }
+
+    MarkdownSegmentRenderer.render(
+      splitASTIntoSegments(document(latexMathDisplay("x^2")), plugins),
+      defaultStyle,
+      context,
+      onPluginEvent = sink,
+      plugins = plugins,
+    )
+
+    assertSame(sink, plugin.blockSegment.lastPayloadSink)
+  }
+
   @Test
   fun aNullPayloadFallsBackToTextRenderingInsteadOfDroppingTheNode() {
     val rendered = render(document(latexMathDisplay(FakePlugin.DECLINE)))

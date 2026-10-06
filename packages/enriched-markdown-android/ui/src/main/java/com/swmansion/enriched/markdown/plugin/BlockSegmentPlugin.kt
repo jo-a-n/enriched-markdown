@@ -15,11 +15,16 @@ interface BlockSegmentPlugin<P : PluginSegmentPayload> {
   /**
    * Render-thread, so do expensive work here rather than in [updateView]. Returns null to fall back
    * to core text rendering for this node.
+   *
+   * Report problems with the content to [onPluginEvent] here rather than from the view: core
+   * reuses a view whose segment is unchanged without updating it, so a report made from the view
+   * would not be repeated once the document is replaced.
    */
   fun renderPayload(
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
+    onPluginEvent: PluginEventSink?,
   ): P?
 
   /** Main thread. */

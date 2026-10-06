@@ -7,20 +7,20 @@ import android.view.View
 import com.swmansion.enriched.markdown.parser.MarkdownASTNode
 import com.swmansion.enriched.markdown.plugin.BlockSegmentPlugin
 import com.swmansion.enriched.markdown.plugin.InternalPluginApi
+import com.swmansion.enriched.markdown.plugin.PluginEventSink
 import com.swmansion.enriched.markdown.plugin.PluginSegmentPayload
 import com.swmansion.enriched.markdown.renderer.latexSourceOf
 import com.swmansion.enriched.markdown.segments.SegmentViewConfig
 import com.swmansion.enriched.markdown.styles.StyleConfig
-import io.ratex.DisplayList
 import io.ratex.RaTeXEngine
 import io.ratex.RaTeXFontLoader
+import io.ratex.RaTeXRenderer
 
-/** A display equation, parsed on the render thread. Core signs the segment with [latex]. */
+/** A display equation, laid out on the render thread. Core signs the segment with [latex]. */
 class MathSegmentPayload internal constructor(
   val latex: String,
   /** Null when the engine rejected [latex]. */
-  internal val displayList: DisplayList?,
-  internal val failure: Throwable?,
+  internal val renderer: RaTeXRenderer?,
 ) : PluginSegmentPayload {
   override val signatureSource: String get() = latex
 }
@@ -31,31 +31,36 @@ class MathSegmentPayload internal constructor(
  */
 class MathBlockSegment : BlockSegmentPlugin<MathSegmentPayload> {
   /**
-   * Parses here rather than in the view; RaTeX's own async API runs the same parse off the main
-   * thread. Returns null for half-arrived content, which core then renders as text.
+   * Lays out here rather than in the view; RaTeX's own async API runs the same parse off the main
+   * thread. A failure is reported here too, so it is reported again for every new document, as an
+   * inline one is. Returns null for half-arrived content, which core then renders as text.
    */
   override fun renderPayload(
     node: MarkdownASTNode,
     style: StyleConfig,
     context: Context,
+    onPluginEvent: PluginEventSink?,
   ): MathSegmentPayload? {
     val latex = latexSourceOf(node)
     if (latex.isBlank()) return null
 
-    var failure: Throwable? = null
-    val displayList =
-      runRaTeX(onFailure = { failure = it }) {
+    val mathStyle = style.mathStyle(context)
+    val renderer =
+      runRaTeX(
+        onFailure = { error -> onPluginEvent?.emit(LatexErrorEvent(latex, error.message, displayMode = true)) },
+      ) {
         RaTeXFontLoader.ensureLoaded(context)
-        RaTeXEngine.parseBlocking(latex, displayMode = true, color = style.mathStyle(context).color)
+        val displayList = RaTeXEngine.parseBlocking(latex, displayMode = true, color = mathStyle.color)
+        RaTeXRenderer(displayList, mathStyle.fontSize) { RaTeXFontLoader.getTypeface(it) }
       }
-    return MathSegmentPayload(latex, displayList, failure)
+    return MathSegmentPayload(latex, renderer)
   }
 
   override fun createView(
     payload: MathSegmentPayload,
     config: SegmentViewConfig,
   ): View =
-    MathContainerView(config.context, config.style, config.selectionMenuConfig, config.onPluginEvent).apply {
+    MathContainerView(config.context, config.style, config.selectionMenuConfig).apply {
       applyPayload(payload)
     }
 
