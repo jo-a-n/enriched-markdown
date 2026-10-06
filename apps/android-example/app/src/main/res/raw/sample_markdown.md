@@ -198,6 +198,16 @@ Inline failures fall back the same way: $\notARealCommand{y}$ stays as its sourc
 
 ---
 
+## Highlight Examples
+
+Mark the parts that matter with ==double equals==.
+
+- A single ==highlighted phrase== inside a list item
+- Highlight combined with ==**bold**== and ==*italic*== text
+- Highlight around a ==[link](https://swmansion.com)==
+
+---
+
 ## Fascinating Forest Facts
 
 Did you know that trees communicate through an underground network? Scientists call this the `Wood Wide Web` — a fungal network connecting tree roots across entire forests.
