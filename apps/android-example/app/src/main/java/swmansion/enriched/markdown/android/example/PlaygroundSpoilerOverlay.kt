@@ -110,27 +110,24 @@ class ShimmerSegment(
 
 // A custom overlay drawn on the text view's Canvas, showing the text through.
 
-/** Pixelates the hidden text, so its shape shows but the words don't. */
+/**
+ * The README's Canvas example: the hidden text, shrunk to one pixel per block and scaled back up, so
+ * its shape shows but the words don't. Keep it in sync with the README.
+ */
 data class PixelatedSpoiler(
-  val blockSize: Float = 6f, // dp
+  val blockSize: Float = 6f,
 ) : CustomSpoilerOverlay {
   override fun createSegmentOverlay(
     host: SpoilerOverlayHost,
     style: SpoilerStyle,
-  ) = PixelatedSegment(blockSize * host.density, style.color)
+  ) = PixelatedSegment(blockSize * host.density)
 }
 
 class PixelatedSegment(
   private val blockSize: Float,
-  color: Int,
 ) : SpoilerSegmentOverlay() {
-  // A faint tint, so the segment reads as hidden even where the text is sparse.
-  private val backdrop =
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      this.color = color
-      alpha = 40
-    }
-  private val pixelPaint = Paint().apply { isFilterBitmap = false } // hard-edged blocks
+  // Paint filters bitmaps by default since Android 10; turn it off so the blocks keep hard edges.
+  private val paint = Paint().apply { isFilterBitmap = false }
   private val bounds = RectF()
   private var pixels: Bitmap? = null
 
@@ -138,24 +135,20 @@ class PixelatedSegment(
     canvas: Canvas,
     segment: SpoilerSegment,
   ) {
-    bounds.set(0f, 0f, segment.width, segment.height)
-    canvas.drawRoundRect(bounds, blockSize / 2, blockSize / 2, backdrop)
-    canvas.drawBitmap(pixelsFor(segment), null, bounds, pixelPaint)
-  }
-
-  // drawText lays out the line each time it's called, so the pixels are made once per size.
-  private fun pixelsFor(segment: SpoilerSegment): Bitmap {
     val columns = (segment.width / blockSize).toInt().coerceAtLeast(1)
     val rows = (segment.height / blockSize).toInt().coerceAtLeast(1)
-    pixels?.let { if (it.width == columns && it.height == rows) return it }
-    return Bitmap.createBitmap(columns, rows, Bitmap.Config.ARGB_8888).also { bitmap ->
-      // The text, drawn shrunk to one pixel per block.
-      Canvas(bitmap).apply {
-        scale(columns / segment.width, rows / segment.height)
-        segment.drawText(this)
-      }
-      pixels = bitmap
-    }
+    val image =
+      pixels?.takeIf { it.width == columns && it.height == rows }
+        ?: Bitmap.createBitmap(columns, rows, Bitmap.Config.ARGB_8888).also { bitmap ->
+          // The text, shrunk to one pixel per block.
+          Canvas(bitmap).apply {
+            scale(columns / segment.width, rows / segment.height)
+            segment.drawText(this)
+          }
+          pixels = bitmap
+        }
+    bounds.set(0f, 0f, segment.width, segment.height)
+    canvas.drawBitmap(image, null, bounds, paint)
   }
 
   override fun onRemoved() {

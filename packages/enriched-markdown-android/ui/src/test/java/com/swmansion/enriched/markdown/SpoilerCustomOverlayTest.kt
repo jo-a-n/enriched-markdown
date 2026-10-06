@@ -501,5 +501,42 @@ class SpoilerCustomOverlayTest {
     assertFalse(test.span.revealed)
   }
 
+  // MARK: The README example
+
+  @Test
+  fun theReadmePixelatedSpoilerDrawsTheTextAsHardEdgedBlocks() {
+    val document = document(paragraph(text("plain "), spoiler(text("secret words")), text(" more")))
+    // The same text through a probe, for the segment's geometry.
+    val probe = Probe()
+    val probed = harness(document, ProbeOverlay("a", probe))
+    probed.draw()
+    val segment = requireNotNull(probe.created.single().segment)
+    val layout = requireNotNull(probed.textView.layout)
+    val left = probed.textView.totalPaddingLeft + layout.getPrimaryHorizontal(segment.start)
+    val top = probed.textView.totalPaddingTop + layout.getLineBaseline(0) - segment.baseline
+
+    val test = harness(document, PixelatedSpoiler())
+    test.textView.paint.color = Color.BLACK
+    val bitmap = test.draw()
+
+    val blockSize = 6f * test.textView.resources.displayMetrics.density
+    val columns = (segment.width / blockSize).toInt()
+    val rows = (segment.height / blockSize).toInt()
+    val blockWidth = segment.width / columns
+    val blockHeight = segment.height / rows
+    var inked = 0
+    for (column in 0 until columns) {
+      for (row in 0 until rows) {
+        // Two neighbouring pixels well inside one block: unfiltered, they match.
+        val x = (left + (column + 0.5f) * blockWidth).toInt()
+        val y = (top + (row + 0.5f) * blockHeight).toInt()
+        assertEquals("Block ($column, $row)", bitmap.getPixel(x, y), bitmap.getPixel(x + 1, y + 1))
+        if (Color.alpha(bitmap.getPixel(x, y)) > 0) inked++
+      }
+    }
+    assertTrue("Some blocks should hold the text", inked > 0)
+    assertFalse(test.span.revealed)
+  }
+
   private fun Spannable.spoilerSpans(): Array<SpoilerSpan> = getSpans(0, length, SpoilerSpan::class.java)
 }
