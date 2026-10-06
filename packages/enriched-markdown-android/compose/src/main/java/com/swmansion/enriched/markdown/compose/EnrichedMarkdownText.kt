@@ -40,7 +40,8 @@ typealias PluginEvent = PluginEventInternal
  * [spoilerOverlay] picks how `||spoiler||` text is concealed until it is tapped.
  *
  * [onPluginEvent] receives events reported by installed plugins (for example an expression a
- * plugin could not render), at most once per distinct event for the lifetime of the view.
+ * plugin could not render), once per distinct event until [markdown] is replaced rather than
+ * appended to.
  *
  * **Previews:** This component renders nothing in `@Preview` because it relies on [AndroidView].
  */

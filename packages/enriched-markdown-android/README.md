@@ -369,10 +369,11 @@ data class LatexErrorEvent(
 ) : PluginEvent
 ```
 
-Each view reports a distinct event at most once, by event equality, and keeps remembering it when
-`markdown` changes, so streamed content does not report the same failure on every update. A
-recycled view starts with an empty record. `PluginEvent` itself carries only `pluginId`, so check
-the type — as above — before reading a plugin's own fields.
+Each view reports a distinct event at most once, by event equality, for as long as `markdown` is
+only appended to, so streamed content does not report the same failure on every update. Replacing
+`markdown` with anything that does not extend it starts a new document with an empty record, so
+its failures are reported again; so does a recycled view. `PluginEvent` itself carries only
+`pluginId`, so check the type — as above — before reading a plugin's own fields.
 
 ### `Md4cFlags`
 
