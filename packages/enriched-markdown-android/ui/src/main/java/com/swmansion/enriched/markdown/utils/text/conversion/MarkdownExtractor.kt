@@ -72,7 +72,9 @@ object MarkdownExtractor {
     var i = start
     while (i < end) {
       val nextTransition = spannable.nextSpanTransition(i, end, Any::class.java)
-      val segmentText = spannable.subSequence(i, nextTransition).toString()
+      val segmentText =
+        pluginMarkdownSource(spannable, i, nextTransition)
+          ?: spannable.subSequence(i, nextTransition).toString()
 
       val handled =
         processSegment(
@@ -94,6 +96,15 @@ object MarkdownExtractor {
 
     headingAccumulator.flush(result, state)
     return result.toString()
+  }
+
+  private fun pluginMarkdownSource(
+    spannable: Spannable,
+    start: Int,
+    end: Int,
+  ): String? {
+    if (end - start != 1 || spannable[start] != '\uFFFC') return null
+    return spannable.getSpans(start, end, PluginInlineSpan::class.java).firstOrNull()?.toMarkdownSource()
   }
 
   private fun processSegment(
@@ -121,14 +132,6 @@ object MarkdownExtractor {
       val imageSpans = spannable.getSpans(segmentStart, segmentEnd, ImageSpan::class.java)
       if (imageSpans.isNotEmpty()) {
         appendImage(imageSpans[0], result, state)
-        return true
-      }
-
-      // The span carries its own delimiters: core round-trips plugin content without knowing
-      // which syntax produced it.
-      val pluginSpans = spannable.getSpans(segmentStart, segmentEnd, PluginInlineSpan::class.java)
-      if (pluginSpans.isNotEmpty()) {
-        result.append(pluginSpans[0].toMarkdownSource())
         return true
       }
     }
