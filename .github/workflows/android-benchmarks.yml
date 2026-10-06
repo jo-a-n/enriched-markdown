@@ -1,9 +1,12 @@
 name: Android benchmarks
 
-# Comment `/benchmark android` on a pull request, or dispatch with its number,
+# Label a pull request `benchmark: android` (later pushes re-run it while the
+# label stays), comment `/benchmark android` on it, or dispatch with its number,
 # to compare its head against main on one emulator and post the table.
 # Forks run only at a reviewed commit: `/benchmark android <full head SHA>`.
 on:
+  pull_request:
+    types: [labeled, synchronize]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -20,9 +23,13 @@ on:
 jobs:
   resolve:
     # Runs pull request code, so it needs write access. The association is a
-    # cheap prefilter; the permission check below decides.
+    # cheap prefilter; the permission check below decides. The label skips
+    # forks, which have no reviewed commit to pin and get a read-only token.
     if: >-
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/benchmark android') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (
+        (github.event.action == 'labeled' && github.event.label.name == 'benchmark: android')
+        || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'benchmark: android'))))
+      || (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/benchmark android') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -35,17 +42,18 @@ jobs:
       base: ${{ steps.pr.outputs.base }}
       behind: ${{ steps.pr.outputs.behind }}
     steps:
-      - name: Check the commenter's permission
-        if: github.event_name == 'issue_comment'
+      # Labeling needs only triage access, so the labeler is checked too.
+      - name: Check the requester's permission
+        if: github.event_name != 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
-          COMMENTER: ${{ github.event.comment.user.login }}
+          REQUESTER: ${{ github.event.sender.login }}
         run: |
           set -euo pipefail
-          PERMISSION=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)
+          PERMISSION=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$REQUESTER/permission" --jq .permission)
           # maintain reads as write here, and triage as read.
           if [[ "$PERMISSION" != admin && "$PERMISSION" != write ]]; then
-            echo "::error::@$COMMENTER has $PERMISSION access; a benchmark needs write access"
+            echo "::error::@$REQUESTER has $PERMISSION access; a benchmark needs write access"
             exit 1
           fi
 
@@ -64,7 +72,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
-          NUMBER: ${{ github.event.issue.number || inputs.pull_request }}
+          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request }}
           BODY: ${{ github.event.comment.body }}
           COMMIT: ${{ inputs.commit }}
         run: |
@@ -165,7 +173,10 @@ jobs:
       # build runs without the Actions runtime token, so its tooling cannot
       # save caches to main by accident. Code that wants the token can still
       # read it from the runner, so reviewing what runs here is the safeguard.
+      # A step that runs out of time fails, while a job that does is cancelled
+      # and would read as superseded, so the limit is set here, under the job's.
       - name: Compare the pull request against main
+        timeout-minutes: 75
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
@@ -189,7 +200,7 @@ jobs:
           if-no-files-found: ignore
 
   # Kept apart so pull request code never holds a write token. A cancelled run
-  # leaves the report to the newer one.
+  # was superseded, so it leaves the report to the newer one.
   report:
     needs: [resolve, benchmark]
     if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.benchmark.result != 'cancelled' }}

@@ -200,12 +200,14 @@ shows the direction of a change, not its size.
 
 `.github/workflows/android-benchmarks.yml` runs the comparison on demand, on an emulator.
 It is not part of `.github/workflows/ci.yml`: emulator numbers are too noisy to gate a pull
-request on. Comment `/benchmark android` on a pull request (write access required), or start
-the workflow from the Actions tab with the pull request number. It measures the pull request
-head against the tip of `main` and comments the table, with both commits, on the pull
-request. Those numbers only show the direction of a change; confirm it on a physical device.
+request on. Label a pull request `benchmark: android` (later pushes re-run it while the label
+stays), comment `/benchmark android` on it, or start the workflow from the Actions tab with
+the pull request number; each needs write access. It measures the pull request head against
+the tip of `main` and comments the table, with both commits, on the pull request. Those
+numbers only show the direction of a change; confirm it on a physical device. A row that
+varies more than ±25% on either side is marked too noisy to call faster or slower.
 
 The run builds the pull request's code, so a pull request from a fork is measured only at a
-commit you name after reviewing it: `/benchmark android <full head SHA>`. If the head has
-moved on since, the run stops and says so. A newer request on the same pull request
-replaces one still running.
+commit you name after reviewing it: `/benchmark android <full head SHA>`; the label does
+nothing there. If the head has moved on since, the run stops and says so. A newer request
+on the same pull request replaces one still running.
