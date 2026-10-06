@@ -64,6 +64,10 @@ const resultsSuffix = '-benchmarkData.json';
 
 // Ratios inside this band are noise, not a change.
 const noiseBand = { faster: 0.8, slower: 1.25 };
+// A row whose coefficient of variation on either side is above this spreads
+// wider than the band, so its ratio says nothing either way. A physical device
+// stays under about 10%; an emulator can exceed 100%.
+const noisyAbove = 0.25;
 
 try {
   const options = parseArgs(process.argv.slice(2));
@@ -375,7 +379,7 @@ function report(head, base) {
         base: before ? formatTime(before) : '',
         head: after ? formatTime(after) : '',
         ratio,
-        verdict: ratio ? verdictFor(ratio) : null,
+        verdict: ratio ? verdictFor(ratio, before, after) : null,
         allocations: formatAllocations(before, after),
       };
     })
@@ -419,6 +423,7 @@ function report(head, base) {
     `${marker('faster')} faster than ${noiseBand.faster}×`,
     `${marker('same')} within noise`,
     `${marker('slower')} slower than ${noiseBand.slower}×`,
+    `${marker('noisy')} too noisy: a side varies more than ±${noisyAbove * 100}%`,
     `${marker('missing')} measured on one side only`,
   ].join(' · ');
   const markdown = [
@@ -457,7 +462,8 @@ function byReportOrder(left, right) {
   );
 }
 
-function verdictFor(ratio) {
+function verdictFor(ratio, ...sides) {
+  if (sides.some(({ deviation }) => deviation > noisyAbove)) return 'noisy';
   if (ratio >= noiseBand.slower) return 'slower';
   if (ratio <= noiseBand.faster) return 'faster';
   return 'same';
@@ -468,14 +474,16 @@ function summarize(rows) {
     rows.filter((row) => row.verdict === verdict).length;
   const slower = count('slower');
   const faster = count('faster');
+  const noisy = count('noisy');
   const missing = count(null);
-  if (slower === 0 && faster === 0 && missing === 0) {
+  if (slower === 0 && faster === 0 && noisy === 0 && missing === 0) {
     return `${marker('same')} No benchmark differs from the base beyond noise.`;
   }
   return [
     slower ? `${marker('slower')} ${slower} slower` : null,
     faster ? `${marker('faster')} ${faster} faster` : null,
     `${marker('same')} ${count('same')} within noise`,
+    noisy ? `${marker('noisy')} ${noisy} too noisy to tell` : null,
     missing
       ? `${marker('missing')} ${missing} measured on one side only`
       : null,
@@ -486,7 +494,13 @@ function summarize(rows) {
 
 function marker(verdict) {
   return (
-    { slower: '🟠', faster: '🟢', same: '⚪', missing: '⚠️' }[verdict] ?? ''
+    {
+      slower: '🟠',
+      faster: '🟢',
+      same: '⚪',
+      noisy: '〰️',
+      missing: '⚠️',
+    }[verdict] ?? ''
   );
 }
 
