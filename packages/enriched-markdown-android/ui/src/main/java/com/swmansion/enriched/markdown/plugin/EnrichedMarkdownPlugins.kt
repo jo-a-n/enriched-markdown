@@ -114,8 +114,8 @@ object EnrichedMarkdownPlugins {
   @Volatile
   private var current: PluginSnapshot = PluginSnapshot.EMPTY
 
-  /** What renders use. Reading it freezes the registry. */
-  val snapshot: PluginSnapshot
+  /** What renders use. Reading it freezes the registry, so only core's render paths may. */
+  internal val snapshot: PluginSnapshot
     get() {
       if (!frozen) synchronized(lock) { frozen = true }
       return current
