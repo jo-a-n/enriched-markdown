@@ -15,12 +15,11 @@ enum SpoilerInteraction {
         spoilerRanges(in: attributedText, concealedOnly: false)
     }
 
-    /// `range`'s text as it looks once revealed, its paragraph style reduced
-    /// to the line metrics so an overlay can lay it out inside its own bounds.
     static func revealedText(of attributedText: NSAttributedString, in range: NSRange) -> NSAttributedString {
         let text = NSMutableAttributedString(attributedString: attributedText.attributedSubstring(from: range))
         let all = NSRange(location: 0, length: text.length)
         SpoilerConcealment.reveal(text, in: all)
+        text.removeAttribute(.link, range: all)
         text.enumerateAttribute(.paragraphStyle, in: all) { value, run, _ in
             guard let paragraph = value as? NSParagraphStyle else { return }
             text.addAttribute(.paragraphStyle, value: lineStyle(of: paragraph), range: run)
@@ -28,9 +27,6 @@ enum SpoilerInteraction {
         return text
     }
 
-    /// Line height, spacing, direction and alignment only, with wrapping off:
-    /// the indents and paragraph spacing would move the slice inside its
-    /// overlay, and rounding could break it into two lines.
     private static func lineStyle(of paragraph: NSParagraphStyle) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.minimumLineHeight = paragraph.minimumLineHeight

@@ -175,11 +175,6 @@ final class SpoilerTests: XCTestCase {
         XCTAssertEqual(drawn, real, accuracy: 1)
     }
 
-    /// Inline code and highlight boxes come from the layout engine, not the
-    /// font, so they are the tell when the slice is laid out differently
-    /// from the text view: under a theme line height they have to top and
-    /// bottom out where the revealed text's do, and a quote's indent must
-    /// not push them along.
     @MainActor
     func testConcealedTextImagePaintsInlineBackgroundsWhereTheTextViewDoes() throws {
         config.blockquote.lineHeight = 40
@@ -203,6 +198,54 @@ final class SpoilerTests: XCTestCase {
 
         XCTAssertEqual(drawnCode, realCode, accuracy: 1, "code box")
         XCTAssertEqual(drawnHighlight, realHighlight, accuracy: 1, "highlight box")
+    }
+
+    @MainActor
+    func testConcealedTextImageKeepsTheThemeLinkStyle() throws {
+        config.link.foregroundColor = .red
+        config.link.underline = false
+        let textView = makeLaidOutTextView("Shown ||[hidden link](https://swmansion.com)|| after")
+        let overlay = try XCTUnwrap(overlays(in: textView).first)
+        let frame = overlay.frame
+        let image = overlay.concealedTextImage()
+        let canvas = CGRect(origin: .zero, size: frame.size)
+        let drawn = try XCTUnwrap(inkBounds(of: image, in: canvas))
+        XCTAssertEqual(drawn, try XCTUnwrap(inkBounds(of: image, in: canvas, matching: .red)), accuracy: 1, "all ink is the theme red")
+
+        try revealFirstSpoiler(in: textView)
+        let real = try XCTUnwrap(inkBounds(of: snapshot(of: textView), in: frame))
+
+        XCTAssertEqual(drawn, real, accuracy: 1, "same ink box as the revealed text")
+    }
+
+    @MainActor
+    func testImageArrivingAfterASliceWasDrawnStillShowsInTheTextView() throws {
+        let downloader = DeferredImageDownloader()
+        let textView = laidOutTextView(showing: spoilerWithImage(downloadedBy: downloader), width: 320, config: config)
+        let overlay = try XCTUnwrap(overlays(in: textView).first)
+        try revealFirstSpoiler(in: textView)
+        displayLayers(of: textView)
+        _ = overlay.concealedTextImage()
+
+        downloader.complete(with: makeImage())
+        drainMainQueue()
+        textView.layoutIfNeeded()
+        displayLayers(of: textView)
+
+        let box = frame(of: try rangeOfWord("\u{FFFC}", in: textView.attributedText), in: textView)
+        XCTAssertNotNil(inkBounds(of: snapshot(of: textView), in: box, matching: .red), "the image, not the placeholder")
+    }
+
+    @MainActor
+    func testConcealedTextImageOfAnEmptySliceIsATransparentCanvas() throws {
+        let textView = makeLaidOutTextView("||hidden||")
+        let overlay = try XCTUnwrap(overlays(in: textView).first)
+
+        let image = overlay.concealedTextImage(NSAttributedString())
+
+        XCTAssertEqual(image.size.width, overlay.bounds.width, accuracy: 1)
+        XCTAssertEqual(image.size.height, overlay.bounds.height, accuracy: 1)
+        XCTAssertNil(inkBounds(of: image, in: CGRect(origin: .zero, size: image.size)))
     }
 
     @MainActor
@@ -401,9 +444,44 @@ final class SpoilerTests: XCTestCase {
         UIGraphicsImageRenderer(bounds: view.bounds).image { context in view.layer.render(in: context.cgContext) }
     }
 
+    /// Gives every layer its backing store, as a frame does. Without one,
+    /// `snapshot` draws a fragment afresh and hides a missed invalidation.
+    @MainActor
+    private func displayLayers(of view: UIView) {
+        func display(_ layer: CALayer) {
+            layer.displayIfNeeded()
+            layer.sublayers?.forEach(display)
+        }
+        display(view.layer)
+    }
+
+    @MainActor
+    private func frame(of range: NSRange, in textView: MarkdownTextView) -> CGRect {
+        var union = CGRect.null
+        TextLayoutHelpers.enumerateSegmentFrames(of: range, in: textView) { segment, _, _ in union = union.union(segment) }
+        return union
+    }
+
+    private func spoilerWithImage(downloadedBy downloader: ImageDownloading) -> NSAttributedString {
+        let text = NSMutableAttributedString(
+            attributedString: MarkdownRenderer.render("||hidden ![alt](data:image/png;base64,AA==) image||", config: config)
+        )
+        let attachment = MarkdownImageAttachment.attachment(
+            for: "https://example.invalid/\(#function).png",
+            config: config,
+            isInline: true,
+            altText: "alt",
+            downloader: downloader
+        )
+        text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            guard value is MarkdownImageAttachment else { return }
+            text.addAttribute(.attachment, value: attachment, range: range)
+        }
+        return text
+    }
+
     /// Bounding box, in points relative to `rect`'s origin, of the pixels in
-    /// `rect` that are more than faintly opaque, and near `color` when one is
-    /// given; nil when there are none.
+    /// `rect` that are more than faintly opaque; nil when there are none.
     private func inkBounds(of image: UIImage, in rect: CGRect, matching color: UIColor? = nil) -> CGRect? {
         guard let cgImage = image.cgImage else { return nil }
         let scale = image.scale
